@@ -12,9 +12,9 @@
   <img alt="GCP" src="https://img.shields.io/badge/Cloud-GCE%20%2B%20Terraform-4285F4?logo=googlecloud&logoColor=white">
 </p>
 
-A graduate course project (Python Programming for Engineers) that grew into a full,
-cloud-deployed, message-driven multi-agent system. This repository is the **showcase / overview** —
-the implementation lives in a set of focused service repositories listed [below](#-repositories).
+A full, cloud-deployed, message-driven multi-agent system designed and built from the ground up.
+This repository is the **showcase / overview** — the implementation lives in a set of focused
+service repositories listed [below](#-repositories).
 
 ---
 
@@ -168,11 +168,8 @@ Full write-up: **[docs/Multi-Agent-Workspace-Assistant-Report.pdf](docs/Multi-Ag
 
 ---
 
-## 👥 Team — Group 3
+## 👤 Author
 
-| Member | Responsibilities |
-|---|---|
-| **Trần Tiến Cường** *(Team Leader)* | System architecture & choreography design, API Gateway, Intent Gate, Redis Blackboard & graph memory, LangGraph state-machine logic, shared library, Tracer, web frontend, cloud infrastructure (Terraform, Cloud Build, deployment). |
-| **Nguyễn Trần Quốc Tính** | Domain worker agents — Gmail, Drive, Calendar, Docs — and their Google Workspace API integration; extensibility research and integration interfaces for future third-party platforms (Slack, Microsoft 365, Notion). |
-
-*Built for the Python Programming for Engineers course, 2026.*
+Designed and built by **Trần Tiến Cường** ([@cuongtt0201](https://github.com/cuongtt0201)) —
+end-to-end across system architecture, the choreography backend, graph memory, the React
+frontend, and the cloud infrastructure.
