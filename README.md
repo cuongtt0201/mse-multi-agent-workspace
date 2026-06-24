@@ -153,18 +153,18 @@ as code in Terraform — fully reproducible, and torn down after the demo to avo
 - **Architecture evolution v4 → v5.** v4 coordinated agents through a brittle shared *result-key* convention on the message payload. v5 replaces it with per-agent LangGraph FSMs + a Redis Blackboard as shared truth — markedly easier to reason about and extend.
 - **UI-tool vs. Agent-tool.** Agent-tools run the full async choreography; UI-tools are direct synchronous REST calls (route preview, Calendar Canvas) for features needing an instant response — keeping the conversational path decoupled while UI stays snappy.
 - **Cancel-No-Error.** Rejecting a HITL card cleanly stops all downstream tasks via a `__cancelled__` sentinel — no red errors, no orphaned parked tasks.
-
-Full write-up: **[docs/Multi-Agent-Workspace-Assistant-Report.pdf](docs/Multi-Agent-Workspace-Assistant-Report.pdf)**
+- **Unified encrypted credentials.** Per-service OAuth/service credentials are normalized into a single token format and encrypted at rest with **Fernet**, so every agent authenticates through one consistent, secured path.
 
 ---
 
-## 🚧 Limitations & future work
+## 🚧 Current trade-offs & future work
 
-- **End-to-end & UI verification** — automated coverage of the full multi-agent flow is still incomplete; testing was largely manual.
-- **Calendar event typing** — finer-grained `event_type` handling remains to be implemented.
-- **LLM output limits** — the memory pipeline doesn't yet cap `maxOutputTokens`.
-- **Single-node deployment** — horizontal scaling and HA were out of scope for the demo.
-- **Secrets management** — a managed secret store would be the production approach.
+The coordination layer (choreography, HITL, Blackboard state, reload recovery) and credential
+handling are solid. The open work is about answer quality and scale:
+
+- **Worker accuracy vs. determinism.** Each worker is a deterministic LangGraph FSM rather than an open-ended ReAct loop — great for predictability and tracing, but the single `reflect` step is a weaker self-corrector than an unbounded agent loop, so a worker can still return an imperfect result on ambiguous queries. Stronger classify/reflect prompting (or a bounded-ReAct fallback inside the FSM) is the main lever for better answers.
+- **LLM call latency.** End-to-end latency is dominated by the per-FSM LLM calls. Response caching, smaller/faster classify models, and parallelizing independent agent calls are the levers to pull.
+- **Single-node deployment.** The system runs on one VM; horizontal scaling and HA are the next infra step — the choreography design already makes the stateless workers independently scalable.
 
 ---
 
