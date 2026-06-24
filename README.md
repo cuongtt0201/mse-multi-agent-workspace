@@ -168,8 +168,13 @@ handling are solid. The open work is about answer quality and scale:
 
 ---
 
-## 👤 Author
+## 👤 Author & Contributors
 
-Designed and built by **Trần Tiến Cường** ([@cuongtt0201](https://github.com/cuongtt0201)) —
-end-to-end across system architecture, the choreography backend, graph memory, the React
-frontend, and the cloud infrastructure.
+**Trần Tiến Cường** ([@cuongtt0201](https://github.com/cuongtt0201)) — *lead / author.* System
+architecture & choreography design, API Gateway, Intent Gate, Redis Blackboard & graph memory,
+LangGraph state-machine logic, shared library, Tracer, React frontend, and cloud infrastructure
+(Terraform, Cloud Build, deployment).
+
+**Nguyễn Trần Quốc Tính** — *contributor.* Domain worker agents (Gmail, Drive, Calendar, Docs)
+and their Google Workspace API integration; extensibility research for future third-party
+platforms (Slack, Microsoft 365, Notion).
