@@ -159,12 +159,13 @@ as code in Terraform — fully reproducible, and torn down after the demo to avo
 
 ## 🚧 Current trade-offs & future work
 
-The coordination layer (choreography, HITL, Blackboard state, reload recovery) and credential
-handling are solid. The open work is about answer quality and scale:
+The coordination layer (choreography, HITL, Blackboard state, reload recovery), credential
+handling, and horizontal scalability are solid. The open work is about answer quality and latency:
 
 - **Worker accuracy vs. determinism.** Each worker is a deterministic LangGraph FSM rather than an open-ended ReAct loop — great for predictability and tracing, but the single `reflect` step is a weaker self-corrector than an unbounded agent loop, so a worker can still return an imperfect result on ambiguous queries. Stronger classify/reflect prompting (or a bounded-ReAct fallback inside the FSM) is the main lever for better answers.
-- **LLM call latency.** End-to-end latency is dominated by the per-FSM LLM calls. Response caching, smaller/faster classify models, and parallelizing independent agent calls are the levers to pull.
-- **Single-node deployment.** The system runs on one VM; horizontal scaling and HA are the next infra step — the choreography design already makes the stateless workers independently scalable.
+- **LLM call latency.** Each domain agent makes its own LLM call(s), and the memory layer (graph extraction / retrieval) adds further LLM round-trips — so end-to-end latency on multi-agent requests is dominated by these stacked calls. Response caching, smaller/faster classify models, and parallelizing independent agent calls are the levers to pull.
+
+**By design, not a limitation:** the system scales horizontally — domain workers run as competing consumers on the broker (add more agents freely), and each worker is safe to run as multiple pods on Kubernetes (atomic `GETDEL` claim + per-agent deadline ZSETs prevent duplicate or lost work across pods). State lives in Redis/Postgres, not in any worker, so the workers are stateless and independently replaceable.
 
 ---
 
