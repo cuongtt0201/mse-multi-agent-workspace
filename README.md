@@ -46,6 +46,7 @@ a new domain agent plugs in just by subscribing to the broker.
 flowchart TD
     FE["Web Frontend<br/>(React + Vite)"] -->|POST /chat · JWT| GW
     GW["API Gateway<br/>FastAPI · JWT · OAuth · SSE"] -->|publish intent.request| IG
+    GW <-->|users · OAuth tokens · history · memory| PG[("PostgreSQL")]
     IG["Intent Gate<br/>(Gemini classify)"] -->|publish agent.&#123;name&#125;| MQ
     MQ(("RabbitMQ<br/>Control Plane"))
     MQ --> GM["Gmail Agent"]
