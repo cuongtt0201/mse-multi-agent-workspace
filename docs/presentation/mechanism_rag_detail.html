@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cơ chế Graph RAG & Memory Retrieval - MSE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #070a13;
+            --panel-bg: rgba(15, 23, 42, 0.45);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            
+            --fe-color: #00f0ff;
+            --gateway-color: #38bdf8;
+            --intent-color: #c084fc;
+            --postgres-color: #818cf8;
+            --rabbitmq-color: #fb923c;
+            --external-color: #fbbf24;
+            --drive-color: #34d399;
+            --unrelated-color: rgba(255, 255, 255, 0.2);
+            --email-color: #fb7185;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg);
+            background-image: radial-gradient(at 10% 10%, rgba(30, 27, 75, 0.4) 0px, transparent 50%),
+                              radial-gradient(at 90% 90%, rgba(2, 6, 23, 0.8) 0px, transparent 50%);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        header {
+            background: rgba(11, 17, 33, 0.7);
+            border-bottom: 2px solid var(--border-color);
+            backdrop-filter: blur(12px);
+            padding: 16px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            background: linear-gradient(to right, #ffffff, var(--gateway-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1.45fr 1fr;
+            flex-grow: 1;
+            padding: 20px;
+            gap: 20px;
+            height: calc(100vh - 60px);
+            overflow: hidden;
+        }
+
+        .card {
+            background: var(--panel-bg);
+            border: 1.5px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .card h2 {
+            font-size: 1rem;
+            color: var(--gateway-color);
+            margin-bottom: 12px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .controls-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1.5px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-main);
+            padding: 8px 14px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+            font-size: 0.8rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            border-color: var(--gateway-color);
+        }
+        .btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Graph Canvas */
+        .graph-viewport {
+            flex-grow: 1;
+            position: relative;
+            background: #090d1a;
+            border-radius: 8px;
+            border: 1.5px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .graph-node {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.85);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.72rem;
+            z-index: 10;
+            text-align: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            cursor: default;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .graph-node.active {
+            border-color: var(--fe-color);
+            box-shadow: 0 0 14px rgba(0, 240, 255, 0.4);
+            transform: scale(1.05);
+            background: rgba(0, 240, 255, 0.08);
+        }
+
+        .graph-node.email-active {
+            border-color: var(--email-color);
+            box-shadow: 0 0 14px rgba(251, 113, 133, 0.4);
+            transform: scale(1.05);
+            background: rgba(251, 113, 133, 0.08);
+        }
+
+        .graph-node.skipped {
+            opacity: 0.25;
+            border-style: dashed;
+            background: rgba(255, 255, 255, 0.02);
+            box-shadow: none;
+        }
+
+        .edge-label {
+            position: absolute;
+            font-size: 0.58rem;
+            font-weight: 600;
+            color: var(--text-main);
+            background: #1e293b;
+            padding: 2px 5px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            z-index: 5;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .pulse-path {
+            stroke-dasharray: 6 6;
+            animation: flow 1.2s linear infinite;
+            opacity: 1 !important;
+            stroke-width: 3.5px !important;
+        }
+        @keyframes flow { to { stroke-dashoffset: -30; } }
+
+        .json-viewer {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.68rem;
+            color: #e2e8f0;
+            background: #04060b;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1.5px solid var(--border-color);
+            overflow-y: auto;
+            flex-grow: 1;
+            line-height: 1.35;
+        }
+
+        .json-key { color: #f472b6; }
+        .json-string { color: #34d399; }
+        .json-number { color: #fb923c; }
+        .json-boolean { color: #60a5fa; }
+        .json-null { color: #9ca3af; }
+        .json-highlight-memory {
+            color: #fb7185 !important;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(251, 113, 133, 0.4);
+        }
+
+        .desc-text {
+            font-size: 0.82rem;
+            line-height: 1.45;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .desc-step {
+            background: rgba(15, 23, 42, 0.6);
+            border-left: 3px solid var(--gateway-color);
+            border-top: 1.5px solid var(--border-color);
+            border-right: 1.5px solid var(--border-color);
+            border-bottom: 1.5px solid var(--border-color);
+            padding: 10px 14px;
+            border-radius: 0 6px 6px 0;
+            font-size: 0.8rem;
+            margin-top: 10px;
+            min-height: 60px;
+            color: var(--text-main);
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Cơ chế Memory Retrieval & Graph RAG</h1>
+        <div class="controls-group">
+            <button class="btn" id="btn-prev" onclick="changeStep(-1)" disabled>◀ Trước</button>
+            <button class="btn" id="btn-next" onclick="changeStep(1)">Tiếp theo ▶</button>
+            <button class="btn" style="background:rgba(239, 68, 68, 0.05); border-color: rgba(239, 68, 68, 0.25);" onclick="resetSimulation()">Reset</button>
+            <button class="btn" style="background:transparent; border-color:var(--border-color);" onclick="window.close()">Đóng ✕</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- GRAPH DB CANVAS -->
+        <div class="card">
+            <h2>Memory Graph (nodes/edges + embeddings — lưu JSON trong Postgres UserKnowledge)</h2>
+            <div class="graph-viewport" id="graph-container">
+                <svg style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 1;">
+                    <defs>
+                        <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 2 L 10 5 L 0 8 z" fill="rgba(255, 255, 255, 0.2)"/>
+                        </marker>
+                    </defs>
+                </svg>
+
+                <!-- Center User Node -->
+                <div class="graph-node" id="n-user" style="left: 42%; top: 45%; border-color: var(--gateway-color); background: rgba(2, 132, 199, 0.05);">
+                    <strong>User: Cường</strong>
+                </div>
+
+                <!-- Active Target Colleagues (Tinh, Nam) -->
+                <div class="graph-node" id="n-tinh" style="left: 20%; top: 32%; border-color: var(--intent-color);">
+                    <strong>Tính</strong> (Colleague)
+                </div>
+
+                <div class="graph-node" id="n-nam" style="left: 64%; top: 32%; border-color: var(--intent-color);">
+                    <strong>Nam</strong> (Colleague)
+                </div>
+
+                <!-- Email Nodes representing details -->
+                <div class="graph-node" id="n-email-tinh" style="left: 4%; top: 32%; border-color: var(--email-color);">
+                    <strong>tinh@mse.ai</strong><br>
+                    <span style="font-size: 0.55rem; color: var(--text-muted);">Email Address</span>
+                </div>
+
+                <div class="graph-node" id="n-email-nam" style="left: 81%; top: 32%; border-color: var(--email-color);">
+                    <strong>nam@mse.ai</strong><br>
+                    <span style="font-size: 0.55rem; color: var(--text-muted);">Email Address</span>
+                </div>
+
+                <!-- Inactive Colleague (Hoa - Skipped) -->
+                <div class="graph-node skipped" id="n-hoa" style="left: 64%; top: 62%; border-color: var(--unrelated-color);">
+                    <strong>Hoa</strong> (Colleague)<br>
+                    <span style="font-size: 0.58rem; color: var(--text-muted);">hoa@mse.ai</span>
+                </div>
+
+                <!-- Active Project Node -->
+                <div class="graph-node" id="n-project" style="left: 42%; top: 22%; border-color: var(--external-color);">
+                    <strong>Dự án: MSE</strong>
+                </div>
+
+                <!-- Unrelated Project Node (Skipped) -->
+                <div class="graph-node skipped" id="n-project-erp" style="left: 81%; top: 12%; border-color: var(--unrelated-color);">
+                    <strong>Dự án: ERP System</strong>
+                </div>
+
+                <!-- Active Document Nodes -->
+                <div class="graph-node" id="n-doc1" style="left: 4%; top: 65%; border-color: var(--drive-color);">
+                    <strong>Báo cáo Q2.pdf</strong><br>
+                    <span style="font-size: 0.58rem; color: var(--text-muted);">Drive (Active)</span>
+                </div>
+
+                <!-- Unrelated/Confidential Documents (Skipped) -->
+                <div class="graph-node skipped" id="n-doc-salary" style="left: 42%; top: 64%; border-color: var(--unrelated-color);">
+                    <strong>Bảng lương Q2.xlsx</strong><br>
+                    <span style="font-size: 0.58rem; color: var(--text-muted);">Private Doc</span>
+                </div>
+
+                <div class="graph-node skipped" id="n-doc-erp" style="left: 81%; top: 80%; border-color: var(--unrelated-color);">
+                    <strong>ERP_Specs.docx</strong><br>
+                    <span style="font-size: 0.58rem; color: var(--text-muted);">ERP Spec File</span>
+                </div>
+
+                <!-- Active Event Node -->
+                <div class="graph-node" id="n-event" style="left: 4%; top: 12%; border-color: var(--fe-color);">
+                    <strong>Lịch họp MSE</strong><br>
+                    <span style="font-size: 0.58rem; color: var(--text-muted);">Lịch họp Q2</span>
+                </div>
+
+                <!-- Semantic Tags (Vector Clusters) -->
+                <div class="graph-node" id="n-tag-finance" style="left: 4%; top: 85%; border-color: #ec4899; opacity: 0.7;">
+                    <strong>#Finance</strong>
+                </div>
+                <div class="graph-node" id="n-tag-team" style="left: 42%; top: 85%; border-color: #8b5cf6; opacity: 0.7;">
+                    <strong>#Teamwork</strong>
+                </div>
+
+                <!-- Gateway Target -->
+                <div class="graph-node" id="n-gateway" style="left: 42%; top: 5%; border-color: #64748b;">
+                    <strong>API Gateway (Query Parser)</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- TECHNICAL EXPLANATIONS -->
+        <div class="card">
+            <h2>Giải thích cơ chế & JSON Đóng gói</h2>
+            <div class="desc-text">
+                User gửi câu lệnh: <strong>"Gửi báo cáo dự án MSE cho Tính và Nam"</strong>. <br>
+                API Gateway tiến hành truy hồi quan hệ chiều sâu để giải nghĩa từ khóa <em>"Tính"</em>, <em>"Nam"</em> và <em>"báo cáo dự án MSE"</em>.
+            </div>
+
+            <div class="desc-step" id="step-desc">
+                Nhấp "Tiếp theo ▶" để bắt đầu quét Graph RAG từng bước.
+            </div>
+
+            <h2 style="margin-top: 20px; margin-bottom: 8px;">RabbitMQ TaskMessage (intent.request Payload)</h2>
+            <div class="json-viewer" id="json-box">
+{
+  "headers": {
+    "plan_id": "plan-mse-v5-demo",
+    "source": "gateway",
+    "type": "task"
+  },
+  "body": {
+    "user_id": "user-uuid-1111",
+    "action": "chat",
+    "params": {
+      "content": "Gửi báo cáo dự án MSE cho Tính và Nam"
+    },
+    "user_memory": []
+  }
+}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const connections = [
+            // Core relationships
+            ["e-u-t", "n-user", "n-tinh", "WORKS_WITH", "straight"],
+            ["e-u-n", "n-user", "n-nam", "WORKS_WITH", "straight"],
+            ["e-u-h", "n-user", "n-hoa", "WORKS_WITH", "straight"],
+            ["e-t-p", "n-tinh", "n-project", "MEMBER_OF", "straight"],
+            ["e-n-p", "n-nam", "n-project", "MEMBER_OF", "straight"],
+            ["e-p-d", "n-project", "n-doc1", "HAS_REPORT", "straight"],
+            ["e-u-e", "n-user", "n-event", "ORGANIZES", "straight"],
+            ["e-u-ds", "n-user", "n-doc-salary", "HAS_PRIVATE", "straight"],
+            
+            // Explicit email mappings
+            ["e-tinh-email", "n-tinh", "n-email-tinh", "HAS_EMAIL", "straight"],
+            ["e-nam-email", "n-nam", "n-email-nam", "HAS_EMAIL", "straight"],
+
+            // ERP Relationships (Skipped)
+            ["e-n-erp", "n-nam", "n-project-erp", "WORKS_ON", "straight"],
+            ["e-h-erp", "n-hoa", "n-project-erp", "WORKS_ON", "straight"],
+            ["e-erp-doc", "n-project-erp", "n-doc-erp", "HAS_SPEC", "straight"],
+
+            // Semantic tag links
+            ["e-d1-tag", "n-doc1", "n-tag-finance", "TAGGED", "straight"],
+            ["e-ds-tag", "n-doc-salary", "n-tag-finance", "TAGGED", "straight"],
+            ["e-t-tag", "n-tinh", "n-tag-team", "TAGGED", "straight"],
+
+            // Scan paths from Gateway
+            ["e-gt-p", "n-gateway", "n-project", "1. Quét dự án MSE", "curved"],
+            ["e-p-d-scan", "n-project", "n-doc1", "2. Dò file", "straight"],
+            ["e-gt-t", "n-gateway", "n-tinh", "3. Phân giải Tính", "curved"],
+            ["e-gt-n", "n-gateway", "n-nam", "4. Phân giải Nam", "curved"]
+        ];
+
+        let currentStep = 0;
+        const maxSteps = 5;
+
+        window.onload = () => {
+            initGraphLines();
+            resetSimulation();
+        };
+
+        window.onresize = () => {
+            updateGraphLines();
+        };
+
+        function initGraphLines() {
+            connections.forEach(([id, start, end, label, style]) => {
+                drawEdge(id, start, end, label, style);
+            });
+        }
+
+        function updateGraphLines() {
+            connections.forEach(([id, start, end, label, style]) => {
+                drawEdge(id, start, end, label, style);
+            });
+        }
+
+        function drawEdge(id, startId, endId, label, style) {
+            const container = document.getElementById("graph-container");
+            const svg = container.querySelector("svg");
+            const startEl = document.getElementById(startId);
+            const endEl = document.getElementById(endId);
+            if (!startEl || !endEl) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const startRect = startEl.getBoundingClientRect();
+            const endRect = endEl.getBoundingClientRect();
+
+            const x1 = (startRect.left + startRect.width / 2) - containerRect.left;
+            const y1 = (startRect.top + startRect.height / 2) - containerRect.top;
+            const x2 = (endRect.left + endRect.width / 2) - containerRect.left;
+            const y2 = (endRect.top + endRect.height / 2) - containerRect.top;
+
+            let path = document.getElementById(id);
+            if (!path) {
+                path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("id", id);
+                svg.appendChild(path);
+            }
+
+            let d = "";
+            if (style === "straight") {
+                d = `M ${x1} ${y1} L ${x2} ${y2}`;
+            } else {
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const cx1 = x1 + dx * 0.25;
+                const cy1 = y1 + dy * 0.05;
+                const cx2 = x1 + dx * 0.75;
+                const cy2 = y2 - dy * 0.05;
+                d = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+            }
+
+            path.setAttribute("d", d);
+            const isScanPath = id.startsWith("e-gt") || id === "e-p-d-scan" || id === "e-tinh-email" || id === "e-nam-email";
+            path.setAttribute("stroke", isScanPath ? "rgba(56, 189, 248, 0.3)" : "rgba(255, 255, 255, 0.15)");
+            path.setAttribute("stroke-width", isScanPath ? "2" : "1.5");
+            path.setAttribute("fill", "none");
+            path.setAttribute("opacity", "0.75");
+            
+            // Add label
+            let labelEl = document.getElementById(id + "-label");
+            if (!labelEl) {
+                labelEl = document.createElement("div");
+                labelEl.className = "edge-label";
+                labelEl.id = id + "-label";
+                labelEl.innerText = label;
+                container.appendChild(labelEl);
+            }
+            labelEl.style.left = (x1 + (x2 - x1) / 2) + "px";
+            labelEl.style.top = (y1 + (y2 - y1) / 2 - 12) + "px";
+
+            // If skipped, fade connection line
+            if (startEl.classList.contains("skipped") || endEl.classList.contains("skipped")) {
+                path.setAttribute("opacity", "0.1");
+                labelEl.style.opacity = "0.2";
+            }
+        }
+
+        function highlightPath(id, color, activate) {
+            const path = document.getElementById(id);
+            if (!path) return;
+            if (activate) {
+                path.style.setProperty("--glow-color", color);
+                path.setAttribute("stroke", color);
+                path.setAttribute("stroke-width", "3.5");
+                path.classList.add("pulse-path");
+                path.setAttribute("opacity", "1");
+            } else {
+                path.classList.remove("pulse-path");
+                const isScanPath = id.startsWith("e-gt") || id === "e-p-d-scan" || id === "e-tinh-email" || id === "e-nam-email";
+                path.setAttribute("stroke", isScanPath ? "rgba(56, 189, 248, 0.3)" : "rgba(255, 255, 255, 0.15)");
+                path.setAttribute("stroke-width", isScanPath ? "2" : "1.5");
+                path.setAttribute("opacity", "0.75");
+            }
+        }
+
+        function syntaxHighlight(json) {
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, function (match) {
+                let cls = 'json-number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'json-key';
+                        return '<span class="' + cls + '">' + match.replace(/:$/, '') + '</span>:';
+                    } else {
+                        cls = 'json-string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'json-boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'json-null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+
+        function resetSimulation() {
+            currentStep = 0;
+            updateControls();
+            const stepDesc = document.getElementById("step-desc");
+            const jsonBox = document.getElementById("json-box");
+            stepDesc.innerHTML = "Nhấp \"Tiếp theo ▶\" để bắt đầu quét Graph RAG từng bước.";
+            
+            // Reset nodes
+            document.querySelectorAll(".graph-node").forEach(n => {
+                n.classList.remove("active");
+                n.classList.remove("email-active");
+            });
+
+            // Reset connections
+            connections.forEach(([id]) => {
+                highlightPath(id, "", false);
+            });
+
+            const initialJson = {
+              "headers": {
+                "plan_id": "plan-mse-v5-demo",
+                "source": "gateway",
+                "type": "task"
+              },
+              "body": {
+                "user_id": "user-uuid-1111",
+                "action": "chat",
+                "params": {
+                  "content": "Gửi báo cáo dự án MSE cho Tính và Nam"
+                },
+                "user_memory": []
+              }
+            };
+            jsonBox.innerHTML = syntaxHighlight(JSON.stringify(initialJson, null, 2));
+        }
+
+        function changeStep(dir) {
+            currentStep += dir;
+            if (currentStep < 0) currentStep = 0;
+            if (currentStep > maxSteps) currentStep = maxSteps;
+            updateControls();
+            renderStep();
+        }
+
+        function updateControls() {
+            document.getElementById("btn-prev").disabled = (currentStep === 0);
+            document.getElementById("btn-next").disabled = (currentStep === maxSteps);
+        }
+
+        function renderStep() {
+            const stepDesc = document.getElementById("step-desc");
+            const jsonBox = document.getElementById("json-box");
+
+            // Reset state first to build it step by step
+            document.querySelectorAll(".graph-node").forEach(n => {
+                n.classList.remove("active");
+                n.classList.remove("email-active");
+            });
+            connections.forEach(([id]) => {
+                highlightPath(id, "", false);
+            });
+
+            if (currentStep >= 1) {
+                // Step 1: Project scan
+                stepDesc.innerHTML = "<strong>Bước 1:</strong> Gateway vector search thực thực thể <code>MSE</code> ➔ Phát hiện node <em>Dự án: MSE</em>. Bỏ qua <em>ERP System</em> vì cosine similarity thấp.";
+                highlightPath("e-gt-p", "var(--external-color)", true);
+                document.getElementById("n-project").classList.add("active");
+            }
+            if (currentStep >= 2) {
+                // Step 2: Traverse Project to Doc file
+                stepDesc.innerHTML = "<strong>Bước 2:</strong> Dò quét graph quan hệ <code>HAS_REPORT</code> từ Dự án MSE ➔ Phân giải tài liệu active: <code>Báo cáo Q2.pdf</code>. Bỏ qua <code>Bảng lương Q2.xlsx</code> (Private) và các tài liệu ERP khác.";
+                highlightPath("e-p-d-scan", "var(--drive-color)", true);
+                document.getElementById("n-doc1").classList.add("active");
+            }
+            if (currentStep >= 3) {
+                // Step 3: Resolve Tinh email
+                stepDesc.innerHTML = "<strong>Bước 3:</strong> Seed khớp node <code>Tính</code> (keyword fold dấu 'tinh' HỢP cosine embedding). BFS depth-2 mở rộng qua cạnh, GOM triple <code>Tính → email → tinh@mse.ai</code> vào tập <em>facts</em> (gateway KHÔNG tách thành field email riêng).";
+                highlightPath("e-gt-t", "var(--intent-color)", true);
+                highlightPath("e-tinh-email", "var(--email-color)", true);
+                document.getElementById("n-tinh").classList.add("active");
+                document.getElementById("n-email-tinh").classList.add("email-active");
+            }
+            if (currentStep >= 4) {
+                // Step 4: Resolve Nam email
+                stepDesc.innerHTML = "<strong>Bước 4:</strong> Tương tự, seed node <code>Nam</code> → gom triple <code>Nam → email → nam@mse.ai</code>. Bỏ <em>Hoa</em> vì KHÔNG seed (không khớp keyword lẫn cosine không nổi trội hơn ngưỡng <code>_SEM_MARGIN</code>).";
+                highlightPath("e-gt-n", "var(--intent-color)", true);
+                highlightPath("e-nam-email", "var(--email-color)", true);
+                document.getElementById("n-nam").classList.add("active");
+                document.getElementById("n-email-nam").classList.add("email-active");
+            }
+            
+            let jsonPayload = {
+              "headers": {
+                "plan_id": "plan-mse-v5-demo",
+                "source": "gateway",
+                "type": "task"
+              },
+              "body": {
+                "user_id": "user-uuid-1111",
+                "action": "chat",
+                "params": {
+                  "content": "Gửi báo cáo dự án MSE cho Tính và Nam"
+                },
+                "user_memory": []
+              }
+            };
+
+            if (currentStep === 5) {
+                // Step 5: Wrap payload
+                stepDesc.innerHTML = "<strong>Bước 5 (Hoàn tất):</strong> Toàn bộ triple quanh seed được serialize thành MỘT item <code>user_memory</code> (danh sách bullet) kèm dòng neo danh tính, rồi gửi tới <strong>Intent Gate</strong> (<code>intent.request</code>). Worker LLM downstream đọc các triple này để tự suy ra email người nhận.";
+
+                jsonPayload.body.user_memory = [
+                  {
+                    "key": "Quan hệ liên quan (trí nhớ đồ thị)",
+                    "value": "(Lưu ý: 'User' = chính bạn — chủ tài khoản, email cuong@mse.ai)\n  • User làm việc với Tính\n  • Tính có email tinh@mse.ai\n  • User làm việc với Nam\n  • Nam có email nam@mse.ai\n  • Dự án MSE có báo cáo Báo cáo Q2.pdf"
+                  }
+                ];
+
+                let highlighted = syntaxHighlight(JSON.stringify(jsonPayload, null, 2));
+                highlighted = highlighted.replace(/"user_memory"/g, '<span class="json-key json-highlight-memory">"user_memory"</span>');
+                jsonBox.innerHTML = highlighted;
+                return;
+            }
+
+            // Default output for mid steps
+            jsonBox.innerHTML = syntaxHighlight(JSON.stringify(jsonPayload, null, 2));
+        }
+    </script>
+</body>
+</html>

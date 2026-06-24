@@ -1,0 +1,2093 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSE - AI Workspace Flow Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #070a13;
+            --panel-bg: rgba(15, 23, 42, 0.45);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(255, 255, 255, 0.16);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            
+            --fe-color: #00f0ff;
+            --gateway-color: #38bdf8;
+            --intent-color: #c084fc;
+            --rabbitmq-color: #fb923c;
+            --redis-color: #f87171;
+            --postgres-color: #818cf8;
+            --drive-color: #34d399;
+            --gmail-color: #fb7185;
+            --calendar-color: #a78bfa;
+            --docs-color: #60a5fa;
+            --external-color: #fbbf24;
+            
+            --fe-glow: rgba(0, 240, 255, 0.2);
+            --gateway-glow: rgba(56, 189, 248, 0.2);
+            --intent-glow: rgba(192, 132, 252, 0.2);
+            --rabbitmq-glow: rgba(251, 146, 60, 0.2);
+            --redis-glow: rgba(248, 113, 113, 0.2);
+            --drive-glow: rgba(52, 211, 153, 0.2);
+            --gmail-glow: rgba(251, 113, 133, 0.2);
+            --docs-glow: rgba(96, 165, 250, 0.2);
+            --calendar-glow: rgba(167, 139, 250, 0.2);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg);
+            background-image: 
+                radial-gradient(at 10% 10%, rgba(30, 27, 75, 0.4) 0px, transparent 50%),
+                radial-gradient(at 90% 10%, rgba(15, 23, 42, 0.5) 0px, transparent 50%),
+                radial-gradient(at 50% 90%, rgba(2, 6, 23, 0.8) 0px, transparent 50%);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        header {
+            background: rgba(11, 17, 33, 0.7);
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(12px);
+            padding: 12px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-glow {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--fe-color), var(--intent-color));
+            box-shadow: 0 0 12px linear-gradient(135deg, var(--fe-color), var(--intent-color));
+            animation: pulse 2s infinite alternate;
+        }
+
+        h1 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            background: linear-gradient(to right, #ffffff, #93c5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-main);
+            padding: 6px 14px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--border-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(192, 132, 252, 0.25));
+            border-color: rgba(56, 189, 248, 0.4);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(192, 132, 252, 0.35));
+            border-color: rgba(56, 189, 248, 0.6);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .speed-slider {
+            -webkit-appearance: none;
+            width: 80px;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+        }
+
+        .speed-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--gateway-color);
+            cursor: pointer;
+            box-shadow: 0 0 6px var(--gateway-color);
+        }
+
+        .layout-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 340px;
+            flex-grow: 1;
+            height: calc(100vh - 54px);
+            overflow: hidden;
+        }
+
+        /* LEFT BAR: Stepper & Philosophy */
+        .sidebar-left {
+            border-right: 1px solid var(--border-color);
+            background: rgba(10, 15, 30, 0.4);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+        }
+
+        .sidebar-left::-webkit-scrollbar,
+        .sidebar-right::-webkit-scrollbar,
+        .mock-chat-messages::-webkit-scrollbar,
+        .log-terminal::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar-left::-webkit-scrollbar-thumb,
+        .sidebar-right::-webkit-scrollbar-thumb,
+        .mock-chat-messages::-webkit-scrollbar-thumb,
+        .log-terminal::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .sidebar-section {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px;
+            backdrop-filter: blur(8px);
+        }
+
+        .sidebar-section h2 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--gateway-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 6px;
+        }
+
+        .philosophy-text {
+            font-size: 0.8rem;
+            line-height: 1.4;
+            color: var(--text-muted);
+        }
+
+        .philosophy-highlight {
+            color: var(--rabbitmq-color);
+            font-weight: 500;
+        }
+
+        .philosophy-highlight-redis {
+            color: var(--redis-color);
+            font-weight: 500;
+        }
+
+        .step-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .step-item {
+            font-size: 0.8rem;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            border-left: 2px solid transparent;
+            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.2s ease;
+            color: var(--text-muted);
+            line-height: 1.3;
+        }
+
+        .step-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+
+        .step-item.active {
+            background: rgba(56, 189, 248, 0.08);
+            border-left-color: var(--gateway-color);
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        .step-item.completed {
+            border-left-color: var(--drive-color);
+            text-decoration: none;
+            opacity: 0.75;
+        }
+
+        /* CENTER COLUMN: Architecture Map (top) & Mock Chat (bottom) */
+        .center-column {
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .architecture-viewport {
+            flex-grow: 1;
+            position: relative;
+            background-image: 
+                radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                radial-gradient(rgba(255, 255, 255, 0.01) 1px, transparent 1px);
+            background-size: 20px 20px, 40px 40px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 320px;
+        }
+
+        .architecture-canvas {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 900px;
+            max-height: 480px;
+        }
+
+        .canvas-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Custom Nodes Styling */
+        .node-card {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: absolute;
+            width: 120px;
+            min-height: 60px;
+            z-index: 10;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            font-size: 0.75rem;
+            text-align: center;
+        }
+
+        .node-card h3 {
+            font-size: 0.8rem;
+            margin-bottom: 2px;
+            font-weight: 600;
+        }
+
+        .node-card span {
+            color: var(--text-muted);
+            font-size: 0.65rem;
+        }
+
+        .node-fe { border-color: var(--fe-color); }
+        .node-fe h3 { color: var(--fe-color); }
+        .node-nginx { border-color: #64748b; }
+        .node-gateway { border-color: var(--gateway-color); }
+        .node-gateway h3 { color: var(--gateway-color); }
+        .node-intent { border-color: var(--intent-color); }
+        .node-intent h3 { color: var(--intent-color); }
+        .node-rabbitmq { border-color: var(--rabbitmq-color); width: 140px; }
+        .node-rabbitmq h3 { color: var(--rabbitmq-color); }
+        .node-redis { border-color: var(--redis-color); width: 150px; }
+        .node-redis h3 { color: var(--redis-color); }
+        .node-postgres { border-color: var(--postgres-color); }
+        .node-postgres h3 { color: var(--postgres-color); }
+        
+        /* Agent workers row */
+        .node-worker {
+            width: 110px;
+        }
+        .node-drive { border-color: var(--drive-color); }
+        .node-drive h3 { color: var(--drive-color); }
+        .node-gmail { border-color: var(--gmail-color); }
+        .node-gmail h3 { color: var(--gmail-color); }
+        .node-calendar { border-color: var(--calendar-color); }
+        .node-calendar h3 { color: var(--calendar-color); }
+        .node-docs { border-color: var(--docs-color); }
+        .node-docs h3 { color: var(--docs-color); }
+        .node-external { border-color: var(--external-color); width: 130px; }
+        .node-external h3 { color: var(--external-color); }
+
+        /* active styling */
+        .node-card.active-node {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px currentColor;
+            z-index: 20;
+        }
+        .node-card.parked-node {
+            border-style: dashed;
+            opacity: 0.6;
+            animation: park-float 3s infinite alternate;
+        }
+        @keyframes park-float {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-4px); }
+        }
+
+        /* SVG Glow Connections */
+        .pulse-path {
+            stroke-dasharray: 6 6;
+            animation: flow 1s linear infinite;
+            opacity: 0.95 !important;
+            stroke-width: 2.5px !important;
+        }
+
+        @keyframes flow {
+            to {
+                stroke-dashoffset: -30;
+            }
+        }
+
+        /* Bottom panels: Mock FE UI */
+        .bottom-mock-panel {
+            height: 220px;
+            border-top: 1px solid var(--border-color);
+            background: rgba(8, 12, 24, 0.9);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .mock-panel-header {
+            background: rgba(15, 23, 42, 0.6);
+            border-bottom: 1px solid var(--border-color);
+            padding: 6px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mock-panel-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--fe-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mock-panel-tabs {
+            display: flex;
+            gap: 4px;
+        }
+
+        .mock-tab {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .mock-tab.active {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+
+        /* Mechanisms tab styles */
+        .mechanism-view {
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+            height: calc(100% - 33px);
+            overflow-y: auto;
+        }
+
+        .mechanism-diagram {
+            flex: 1.2;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .mechanism-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .mechanism-info h4 {
+            color: var(--gateway-color);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .mechanism-info p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            line-height: 1.45;
+        }
+
+        .rag-node-box {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 6px 10px;
+            background: rgba(30, 41, 59, 0.4);
+            font-size: 0.75rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .rag-node-arrow {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            line-height: 1;
+        }
+
+        .mock-chat-container {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        .mock-chat-messages {
+            flex-grow: 1;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+        }
+
+        .chat-bubble {
+            max-width: 75%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            animation: bubble-fade 0.3s ease forwards;
+        }
+
+        @keyframes bubble-fade {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .bubble-user {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+            color: var(--text-main);
+        }
+
+        .bubble-agent {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border-color);
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .agent-name-tag {
+            font-size: 0.65rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* FE Rich Cards */
+        .fe-card {
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-top: 8px;
+            padding: 10px;
+            font-size: 0.75rem;
+        }
+
+        .drive-card {
+            border-left: 3px solid var(--drive-color);
+        }
+        .drive-card-title {
+            color: var(--drive-color);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 4px;
+        }
+        
+        .gmail-card {
+            border-left: 3px solid var(--gmail-color);
+        }
+        .gmail-card-title {
+            color: var(--gmail-color);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 4px;
+        }
+
+        .hitl-draft-box {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            padding: 8px;
+            margin-top: 6px;
+            font-family: inherit;
+        }
+
+        .hitl-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 0.7rem;
+            border-radius: 4px;
+        }
+
+        .btn-approve {
+            background: rgba(52, 211, 153, 0.2);
+            border: 1px solid rgba(52, 211, 153, 0.4);
+            color: #34d399;
+        }
+        .btn-approve:hover {
+            background: rgba(52, 211, 153, 0.3);
+            border-color: rgba(52, 211, 153, 0.6);
+        }
+
+        .btn-cancel {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #ef4444;
+        }
+        .btn-cancel:hover {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: rgba(239, 68, 68, 0.6);
+        }
+
+        .sse-ticker {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-style: italic;
+            padding: 4px 0;
+        }
+
+        .ticker-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--fe-color);
+            animation: ticker-pulse 1s infinite alternate;
+        }
+
+        @keyframes ticker-pulse {
+            from { opacity: 0.3; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1.2); }
+        }
+
+        .mock-input-box {
+            border-top: 1px solid var(--border-color);
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.4);
+        }
+
+        .mock-input {
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            font-size: 0.8rem;
+            outline: none;
+            font-family: inherit;
+        }
+
+        /* RIGHT BAR: Blackboard & FSM */
+        .sidebar-right {
+            border-left: 1px solid var(--border-color);
+            background: rgba(10, 15, 30, 0.4);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+        }
+
+        .json-viewer {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+            color: #a7f3d0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            padding: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.03);
+            line-height: 1.4;
+        }
+
+        .json-key { color: #f472b6; }
+        .json-string { color: #34d399; }
+        .json-number { color: #fb923c; }
+        .json-boolean { color: #60a5fa; }
+        .json-null { color: #9ca3af; }
+
+        /* FSM Visualizer Card */
+        .fsm-visual-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+            padding: 8px;
+            position: relative;
+        }
+
+        .fsm-title {
+            align-self: flex-start;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 2px;
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .fsm-node {
+            width: 100%;
+            max-width: 180px;
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 6px 10px;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .fsm-node.active {
+            background: rgba(192, 132, 252, 0.15);
+            border-color: var(--intent-color);
+            color: #f3e8ff;
+            box-shadow: 0 0 8px rgba(192, 132, 252, 0.3);
+            font-weight: 600;
+        }
+        
+        .fsm-node.active-drive {
+            background: rgba(52, 211, 153, 0.15);
+            border-color: var(--drive-color);
+            color: #e6fffa;
+            box-shadow: 0 0 8px rgba(52, 211, 153, 0.3);
+            font-weight: 600;
+        }
+
+        .fsm-node.active-gmail {
+            background: rgba(251, 113, 133, 0.15);
+            border-color: var(--gmail-color);
+            color: #ffeef0;
+            box-shadow: 0 0 8px rgba(251, 113, 133, 0.3);
+            font-weight: 600;
+        }
+
+        .fsm-arrow {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.25);
+            height: 10px;
+            line-height: 10px;
+        }
+
+        /* Signal logger */
+        .log-terminal {
+            background: #04060b;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            padding: 8px;
+            height: 120px;
+            overflow-y: auto;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.7rem;
+            color: #38bdf8;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .log-entry {
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            padding-bottom: 4px;
+            word-break: break-all;
+        }
+
+        .log-time { color: var(--text-muted); }
+        .log-tag-rabbitmq { color: var(--rabbitmq-color); font-weight: 500; }
+        .log-tag-redis { color: var(--redis-color); font-weight: 500; }
+        .log-tag-sse { color: var(--fe-color); font-weight: 500; }
+
+        .popup-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            border-radius: 12px;
+            padding: 24px;
+            z-index: 200;
+            max-width: 600px;
+            width: 90%;
+            display: none;
+            backdrop-filter: blur(16px);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.7);
+            z-index: 199;
+            display: none;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            color: var(--gateway-color);
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .alert-hitl-pulse {
+            animation: alert-glow 1.5s infinite alternate;
+        }
+        @keyframes alert-glow {
+            from { border-color: rgba(251, 113, 133, 0.4); box-shadow: 0 0 5px rgba(251, 113, 133, 0.2); }
+            to { border-color: rgba(251, 113, 133, 1); box-shadow: 0 0 15px rgba(251, 113, 133, 0.5); }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-title">
+            <div class="logo-glow"></div>
+            <h1>MSE — AI Workspace Flow Visualizer</h1>
+        </div>
+        <div class="header-controls">
+            <button class="btn btn-primary" id="btn-play">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play
+            </button>
+            <button class="btn" id="btn-prev">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg> Prev
+            </button>
+            <button class="btn" id="btn-next">
+                Next <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+            </button>
+            <button class="btn" id="btn-reset">Restart</button>
+            
+            <div class="speed-control">
+                <span>Tốc độ:</span>
+                <input type="range" class="speed-slider" id="speed-slider" min="1" max="4" value="2">
+                <span id="speed-label">1x</span>
+            </div>
+            
+            <button class="btn" id="btn-about" style="border-color: var(--intent-color); color: var(--intent-color)">Kiến trúc</button>
+        </div>
+    </header>
+
+    <div class="layout-container">
+        <!-- LEFT PANEL: STEPS & PHILOSOPHY -->
+        <div class="sidebar-left">
+            <div class="sidebar-section">
+                <h2>Cơ chế hoạt động sâu</h2>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <a href="./mechanism_rag_detail.html" target="_blank" class="btn btn-primary" style="text-decoration: none; font-size: 0.75rem; justify-content: center; width: 100%;">
+                        🔍 Chi tiết cơ chế Graph RAG ➔
+                    </a>
+                    <a href="./mechanism_linking_detail.html" target="_blank" class="btn" style="text-decoration: none; font-size: 0.75rem; justify-content: center; border-color: var(--redis-color); color: var(--redis-color); width: 100%;">
+                        🔴 Chi tiết Blackboard Linking ➔
+                    </a>
+                </div>
+            </div>
+            
+            <div class="sidebar-section" style="flex-grow: 1; display: flex; flex-direction: column;">
+                <h2>Tiến trình luồng mẫu</h2>
+                <div class="step-list" id="step-list-container">
+                    <!-- Dynamic Step list will be rendered here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER VIEWPORT: CANVAS MAP + FE SCREEN -->
+        <div class="center-column">
+            <!-- Diagram Canvas -->
+            <div class="architecture-viewport">
+                <div class="architecture-canvas" id="canvas-container">
+                    <svg class="canvas-svg">
+                        <defs>
+                            <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 2 L 10 5 L 0 8 z" fill="rgba(255,255,255,0.15)"/>
+                            </marker>
+                            <marker id="arrow-glow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 2 L 10 5 L 0 8 z" fill="var(--gateway-color)"/>
+                            </marker>
+                        </defs>
+                    </svg>
+
+                    <!-- FE Node -->
+                    <div class="node-card node-fe" id="node-fe" style="left: 4%; top: 5%;">
+                        <h3>React FE</h3>
+                        <span>Chat & Canvas UI</span>
+                    </div>
+
+                    <!-- Nginx Proxy -->
+                    <div class="node-card node-nginx" id="node-nginx" style="left: 27%; top: 5%;">
+                        <h3>Nginx Proxy</h3>
+                        <span>Reverse proxy</span>
+                    </div>
+
+                    <!-- Gateway Node -->
+                    <div class="node-card node-gateway" id="node-gateway" style="left: 50%; top: 5%;">
+                        <h3>API Gateway</h3>
+                        <span>REST, SSE, Auth</span>
+                    </div>
+
+                    <!-- Intent Gate -->
+                    <div class="node-card node-intent" id="node-intent" style="left: 76%; top: 5%;">
+                        <h3>Intent Gate</h3>
+                        <span>Tier-1 LLM Planner</span>
+                    </div>
+
+                    <!-- RabbitMQ Node -->
+                    <div class="node-card node-rabbitmq" id="node-rabbitmq" style="left: 14%; top: 38%;">
+                        <h3>RabbitMQ Bus</h3>
+                        <span>Control Plane (Signals)</span>
+                    </div>
+
+                    <!-- Redis Blackboard -->
+                    <div class="node-card node-redis" id="node-redis" style="left: 45%; top: 38%;">
+                        <h3>Redis Blackboard</h3>
+                        <span>Data Plane (Hash key)</span>
+                    </div>
+
+                    <!-- Postgres -->
+                    <div class="node-card node-postgres" id="node-postgres" style="left: 78%; top: 38%;">
+                        <h3>PostgreSQL</h3>
+                        <span>Chat history, Auth</span>
+                    </div>
+
+                    <!-- Drive Worker -->
+                    <div class="node-card node-worker node-drive" id="node-drive" style="left: 4%; top: 70%;">
+                        <h3>Drive Agent</h3>
+                        <span>Worker FSM</span>
+                    </div>
+
+                    <!-- Gmail Worker -->
+                    <div class="node-card node-worker node-gmail" id="node-gmail" style="left: 27%; top: 70%;">
+                        <h3>Gmail Agent</h3>
+                        <span>Worker FSM</span>
+                    </div>
+
+                    <!-- Calendar Worker -->
+                    <div class="node-card node-worker node-calendar" id="node-calendar" style="left: 50%; top: 70%;">
+                        <h3>Calendar Agent</h3>
+                        <span>Worker FSM</span>
+                    </div>
+
+                    <!-- Docs Worker -->
+                    <div class="node-card node-worker node-docs" id="node-docs" style="left: 73%; top: 70%;">
+                        <h3>Docs Agent</h3>
+                        <span>Worker FSM</span>
+                    </div>
+
+                    <!-- Google APIs External -->
+                    <div class="node-card node-external" id="node-external" style="left: 38.5%; top: 90%;">
+                        <h3>Google APIs</h3>
+                        <span>Drive / Gmail Services</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mock React FE App Screen -->
+            <div class="bottom-mock-panel" id="mock-fe-panel">
+                <div class="mock-panel-header">
+                    <div class="mock-panel-title">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        Mock Frontend UI Canvas (Workspace)
+                    </div>
+                </div>
+                
+                <div class="mock-chat-container">
+                    <div class="mock-chat-messages" id="mock-chat-messages">
+                        <!-- Message boxes will append dynamically -->
+                    </div>
+                </div>
+                
+                <div class="mock-input-box">
+                    <input type="text" class="mock-input" id="mock-chat-input" readonly value="tìm file báo cáo rồi gửi cho Tính">
+                    <button class="btn btn-sm" style="border-radius: 4px; padding: 4px 8px; color: var(--fe-color); border-color: var(--fe-color)" disabled>Gửi</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL: BLACKBOARD + FSM -->
+        <div class="sidebar-right">
+            <!-- Blackboard Inspector -->
+            <div class="sidebar-section" style="flex-grow: 1; display: flex; flex-direction: column; overflow: hidden;">
+                <h2>Redis Blackboard Key</h2>
+                <div style="font-size: 0.7rem; color: var(--text-muted); font-family: monospace; margin-bottom: 4px;">plan:plan-mse-v5-demo:context (HASH)</div>
+                <div class="json-viewer" id="blackboard-inspector" style="flex-grow: 1; overflow-y: auto;">
+                    <!-- Raw JSON viewer -->
+                </div>
+            </div>
+
+            <!-- LangGraph Worker Node Graph Tracker -->
+            <div class="sidebar-section">
+                <h2>Worker LangGraph FSM</h2>
+                <div class="fsm-visual-container">
+                    <div class="fsm-title">
+                        <span id="fsm-active-agent-name">Không hoạt động</span>
+                        <span id="fsm-step-counter" style="color: var(--text-muted);">Attempts: 0/2</span>
+                    </div>
+                    
+                    <div class="fsm-node" id="fsm-node-classify">classify (LLM 1-shot)</div>
+                    <div class="fsm-arrow">▼</div>
+                    <div class="fsm-node" id="fsm-node-execute">execute (Playbook)</div>
+                    <div class="fsm-arrow">▼</div>
+                    <div class="fsm-node" id="fsm-node-reflect">reflect (Self-Correct)</div>
+                    <div class="fsm-arrow">▼</div>
+                    <div class="fsm-node" id="fsm-node-ask_user">ask_user (HITL Pause)</div>
+                    <div class="fsm-arrow">▼</div>
+                    <div class="fsm-node" id="fsm-node-end">END</div>
+                </div>
+            </div>
+
+            <!-- Signal Logs -->
+            <div class="sidebar-section">
+                <h2>Signal & SSE Event Logs</h2>
+                <div class="log-terminal" id="log-terminal">
+                    <!-- Logs stream -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ABOUT -->
+    <div class="modal-overlay" id="modal-overlay"></div>
+    <div class="popup-modal" id="about-modal">
+        <div class="modal-header">
+            <span>KIẾN TRÚC MSE — MASTER SPECIFICATION</span>
+            <button class="modal-close" id="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <ul>
+                <li><strong>Tách 2 mặt phẳng:</strong> RabbitMQ chở tín hiệu siêu nhẹ; Redis Blackboard (<code>plan:{id}:context</code>, HASH) giữ data — đa-pod ghi song song không lost-update.</li>
+                <li><strong>Write-before-Publish:</strong> Agent ghi kết quả + <code>completed</code> lên Blackboard TRƯỚC khi báo downstream.</li>
+                <li><strong>Worker FSM:</strong> <code>classify</code> → <code>execute</code> → <code>reflect</code> (nới query khi rỗng, ≤2 lần) → <code>ask_user</code> (HITL).</li>
+                <li><strong>OAuth Reconnect:</strong> nâng scope (đọc→ghi) cần Disconnect/Connect lại; Gateway refresh & inject token vào <code>platform_tokens</code>.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA STRUCTURE FOR SIMULATION ---
+        const STEPS = [
+            {
+                title: "0. Khởi đầu",
+                desc: "Hệ thống ở trạng thái rỗi. Chờ người dùng nhập câu lệnh.",
+                sender: null,
+                receiver: null,
+                pathId: null,
+                blackboard: {},
+                fsm: { agent: "Không hoạt động", node: null, attempt: 0 },
+                rabbitmq: null,
+                sse: null,
+                action: (fe) => {
+                    fe.innerHTML = `
+                        <div class="sse-ticker"><div class="ticker-dot"></div> Sẵn sàng. Nhập yêu cầu...</div>
+                    `;
+                }
+            },
+            {
+                title: "1. Gửi yêu cầu",
+                desc: "Người dùng gõ: <strong>'tìm file báo cáo rồi gửi cho Tính'</strong> và bấm gửi. Trình duyệt gửi HTTP POST tới Gateway.",
+                sender: "node-fe",
+                receiver: "node-nginx",
+                pathId: "fe-nginx",
+                blackboard: {},
+                fsm: { agent: "Không hoạt động", node: null, attempt: 0 },
+                rabbitmq: null,
+                sse: null,
+                action: (fe) => {
+                    fe.innerHTML = `
+                        <div class="chat-bubble bubble-user">tìm file báo cáo rồi gửi cho Tính</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:#38bdf8"></div> Gateway: Đang phân tích yêu cầu...</div>
+                    `;
+                    // Animate inside RAG tab
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("rag-p-g", "var(--fe-color)");
+                    }, 200);
+                }
+            },
+            {
+                title: "2. Gateway setup",
+                desc: "Gateway tạo <strong>plan_id</strong>, lưu tin nhắn vào PostgreSQL, nạp OAuth token, ghi context + <code>platform_tokens</code> vào Blackboard rồi bắn <code>intent.request</code> lên RabbitMQ.",
+                sender: "node-gateway",
+                receiver: "node-redis",
+                pathId: "gateway-redis",
+                blackboard: {
+                    global_context: {
+                        conversation_id: "conv-98765",
+                        user_id: "user-uuid-1111",
+                        original_query: "tìm file báo cáo rồi gửi cho Tính"
+                    },
+                    tasks: {}
+                },
+                fsm: { agent: "API Gateway", node: null, attempt: 0 },
+                rabbitmq: {
+                    routing_key: "intent.request",
+                    body: { plan_id: "plan-mse-v5-demo", conversation_id: "conv-98765", query: "tìm file báo cáo rồi gửi cho Tính" }
+                },
+                sse: null,
+                action: (fe, next) => {
+                    // Gateway also publishes to rabbitmq and writes to Postgres
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("gateway-rabbitmq", "var(--rabbitmq-color)");
+                    }, 450);
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("gateway-postgres", "var(--postgres-color)");
+                    }, 800);
+
+                    // RAG Graph traversal animations in tab
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("rag-gt-t", "var(--gateway-color)");
+                    }, 200);
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("rag-t-e", "var(--intent-color)");
+                    }, 600);
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("rag-e-gt", "var(--fe-color)");
+                    }, 1000);
+                }
+            },
+            {
+                title: "3. Intent Gate lập plan",
+                desc: "Intent Gate (Tier-1 Planner) nhận tin nhắn từ RabbitMQ, gọi LLM phân tách thành 2 tác vụ: T1 (Drive Search) và T2 (Gmail Compose). Ghi cấu trúc task lên Blackboard và phát tín hiệu cho 2 Worker queue.",
+                sender: "node-intent",
+                receiver: "node-redis",
+                pathId: "intent-redis",
+                blackboard: {
+                    global_context: {
+                        conversation_id: "conv-98765",
+                        user_id: "user-uuid-1111",
+                        original_query: "tìm file báo cáo rồi gửi cho Tính"
+                    },
+                    tasks: {
+                        T1: { agent: "drive", status: "pending", needs_from: [], notify: ["gmail:T2"] },
+                        T2: { agent: "gmail", status: "pending", needs_from: ["drive:T1"], notify: [] }
+                    }
+                },
+                fsm: { agent: "Intent Gate", node: null, attempt: 0 },
+                rabbitmq: {
+                    routing_key: "agent.drive, agent.gmail",
+                    body: { info: "Tín hiệu chạy tác vụ T1, T2 được gửi đồng thời tới Drive Agent và Gmail Agent" }
+                },
+                sse: {
+                    type: "workflow",
+                    payload: { status: "planned", plan: ["T1 (Drive Search)", "T2 (Gmail Compose)"] }
+                },
+                action: (fe) => {
+                    fe.innerHTML = `
+                        <div class="chat-bubble bubble-user">tìm file báo cáo rồi gửi cho Tính</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:#c084fc"></div> Intent Gate: Đã thiết lập kế hoạch (T1: Tìm file, T2: Soạn email)...</div>
+                    `;
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("intent-rabbitmq", "var(--rabbitmq-color)");
+                    }, 400);
+                }
+            },
+            {
+                title: "4. Tự điều phối bất đồng bộ",
+                desc: "Cả Drive Agent và Gmail Agent đều nhận tín hiệu và thức dậy. Cả 2 cùng đọc Blackboard. <strong>Gmail Agent thấy T1 chưa xong nên tự Đỗ chờ (Park)</strong>. <strong>Drive Agent thấy đủ điều kiện nên bắt đầu chạy.</strong>",
+                sender: "node-rabbitmq",
+                receiver: "node-drive", // we also trigger gmail
+                pathId: "rabbitmq-drive",
+                blackboard: {
+                    global_context: { conversation_id: "conv-98765", user_id: "user-uuid-1111", original_query: "tìm file báo cáo rồi gửi cho Tính" },
+                    tasks: {
+                        T1: { agent: "drive", status: "running", needs_from: [], notify: ["gmail:T2"] },
+                        T2: { agent: "gmail", status: "pending (parked)", needs_from: ["drive:T1"], notify: [] }
+                    }
+                },
+                fsm: { agent: "Drive Agent", node: "classify", attempt: 0 },
+                rabbitmq: null,
+                sse: {
+                    type: "workflow",
+                    payload: { task_id: "T1", agent: "drive", status: "running" }
+                },
+                action: (fe) => {
+                    document.getElementById("node-gmail").classList.add("parked-node");
+                    fe.innerHTML = `
+                        <div class="chat-bubble bubble-user">tìm file báo cáo rồi gửi cho Tính</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:var(--drive-color)"></div> Drive Agent: Khởi động...</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:#64748b"></div> Gmail Agent: Chưa đủ dependency (T1). Đang đỗ chờ...</div>
+                    `;
+                    // pulse rabbitmq to gmail too
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("rabbitmq-gmail", "var(--rabbitmq-color)");
+                    }, 200);
+                }
+            },
+            {
+                title: "5. Drive FSM: Classify",
+                desc: "Drive Agent chạy node <code>classify</code>. Gọi LLM 1-shot phân loại action, bóc tham số và thực hiện <strong>nới rộng truy vấn diacritic/non-diacritic</strong>: <code>(name contains 'báo cáo' or name contains 'bao cao')</code>.",
+                sender: "node-drive",
+                receiver: "node-redis",
+                pathId: "drive-redis", // read/write
+                blackboard: {
+                    global_context: { conversation_id: "conv-98765", user_id: "user-uuid-1111", original_query: "tìm file báo cáo rồi gửi cho Tính" },
+                    tasks: {
+                        T1: { agent: "drive", status: "running", input_params: { query: "báo cáo" }, needs_from: [], notify: ["gmail:T2"] },
+                        T2: { agent: "gmail", status: "pending (parked)", needs_from: ["drive:T1"], notify: [] }
+                    }
+                },
+                fsm: { agent: "Drive Agent", node: "classify", attempt: 1 },
+                rabbitmq: null,
+                sse: {
+                    type: "workflow",
+                    payload: { task_id: "T1", node: "classify", status: "running", desc: "🔍 Phân loại ý định & sinh từ khóa tìm kiếm (báo cáo | bao cao)..." }
+                },
+                action: (fe) => {
+                    fe.innerHTML = `
+                        <div class="chat-bubble bubble-user">tìm file báo cáo rồi gửi cho Tính</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:var(--drive-color)"></div> Drive Agent: 🔍 Đang phân tích truy vấn & nới rộng từ khóa tìm kiếm...</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:#64748b"></div> Gmail Agent: Đỗ chờ...</div>
+                    `;
+                }
+            },
+            {
+                title: "6. Drive FSM: Execute (Lần 1)",
+                desc: "Drive Agent chuyển sang node <code>execute</code>. Chạy Playbook gọi Google Drive API tìm kiếm. Mock scenario: kết quả rỗng (do bộ lọc thời gian nghiêm ngặt).",
+                sender: "node-drive",
+                receiver: "node-external",
+                pathId: "drive-external",
+                blackboard: {},
+                fsm: { agent: "Drive Agent", node: "execute", attempt: 1 },
+                rabbitmq: null,
+                sse: {
+                    type: "workflow",
+                    payload: { task_id: "T1", node: "execute", status: "running", desc: "📂 Đang gọi Google Drive API..." }
+                },
+                action: (fe) => {
+                    fe.innerHTML = `
+                        <div class="chat-bubble bubble-user">tìm file báo cáo rồi gửi cho Tính</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:var(--drive-color)"></div> Drive Agent: 📂 Đang tìm kiếm trên Google Drive (Lần 1)...</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:#64748b"></div> Gmail Agent: Đỗ chờ...</div>
+                    `;
+                }
+            },
+            {
+                title: "7. Drive FSM: Reflect",
+                desc: "Drive Agent phát hiện kết quả rỗng, chuyển sang node <code>reflect</code>. LLM self-correction nhận diện lỗi, viết lại truy vấn tìm kiếm rộng hơn và tăng số lần thử lên 2, sau đó lặp lại node <code>execute</code>.",
+                sender: "node-drive",
+                receiver: "node-redis",
+                pathId: "drive-redis",
+                blackboard: {
+                    global_context: { conversation_id: "conv-98765", user_id: "user-uuid-1111", original_query: "tìm file báo cáo rồi gửi cho Tính" },
+                    tasks: {
+                        T1: { agent: "drive", status: "running", attempts: 2, needs_from: [], notify: ["gmail:T2"] },
+                        T2: { agent: "gmail", status: "pending (parked)", needs_from: ["drive:T1"], notify: [] }
+                    }
+                },
+                fsm: { agent: "Drive Agent", node: "reflect", attempt: 2 },
+                rabbitmq: null,
+                sse: {
+                    type: "workflow",
+                    payload: { task_id: "T1", node: "reflect", status: "running", desc: "🔄 Kết quả rỗng, đang tự nới rộng điều kiện tìm kiếm..." }
+                },
+                action: (fe) => {
+                    fe.innerHTML = `
+                        <div class="chat-bubble bubble-user">tìm file báo cáo rồi gửi cho Tính</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:var(--drive-color)"></div> Drive Agent: 🔄 Kết quả trống. Đang tự động nới rộng từ khóa tìm kiếm và thử lại...</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:#64748b"></div> Gmail Agent: Đỗ chờ...</div>
+                    `;
+                }
+            },
+            {
+                title: "8. Drive FSM: Execute (Lần 2)",
+                desc: "Drive Agent chạy lại node <code>execute</code> với truy vấn rộng hơn. Lần này tìm kiếm thành công và trả về file: <strong>'Báo cáo doanh thu Q2.pdf'</strong>.",
+                sender: "node-drive",
+                receiver: "node-external",
+                pathId: "drive-external",
+                blackboard: {},
+                fsm: { agent: "Drive Agent", node: "execute", attempt: 2 },
+                rabbitmq: null,
+                sse: {
+                    type: "workflow",
+                    payload: { task_id: "T1", node: "execute", status: "success" }
+                },
+                action: (fe) => {
+                    fe.innerHTML = `
+                        <div class="chat-bubble bubble-user">tìm file báo cáo rồi gửi cho Tính</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:var(--drive-color)"></div> Drive Agent: 📂 Tìm kiếm lần 2 trên Google Drive...</div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:#64748b"></div> Gmail Agent: Đỗ chờ...</div>
+                    `;
+                }
+            },
+            {
+                title: "9. Ghi trước - Báo sau",
+                desc: "<strong>Quy tắc vàng (Write-before-Publish):</strong> Drive ghi kết quả và status <code>completed</code> vào Blackboard TRƯỚC KHI publish tín hiệu hoàn thành lên RabbitMQ để đánh thức Gmail.",
+                sender: "node-drive",
+                receiver: "node-redis",
+                pathId: "drive-redis",
+                blackboard: {
+                    global_context: { conversation_id: "conv-98765", user_id: "user-uuid-1111", original_query: "tìm file báo cáo rồi gửi cho Tính" },
+                    tasks: {
+                        T1: { 
+                            agent: "drive", 
+                            status: "completed", 
+                            output_results: { 
+                                found_count: 1,
+                                files: [{ id: "file-999", name: "Báo cáo doanh thu Q2.pdf", url: "https://drive.google.com/file/d/999" }] 
+                            },
+                            needs_from: [],
+                            notify: ["gmail:T2"]
+                        },
+                        T2: { agent: "gmail", status: "pending (parked)", needs_from: ["drive:T1"], notify: [] }
+                    }
+                },
+                fsm: { agent: "Drive Agent", node: "end", attempt: 2 },
+                rabbitmq: {
+                    routing_key: "agent.gmail",
+                    body: { headers: { source: "drive", task_id: "T1", type: "result" }, body: { status: "success", data: { files: [{ name: "Báo cáo doanh thu Q2.pdf" }] } } }
+                },
+                sse: {
+                    type: "message",
+                    payload: { text: "Đã tìm thấy file báo cáo." }
+                },
+                action: (fe) => {
+                    fe.innerHTML = `
+                        <div class="chat-bubble bubble-user">tìm file báo cáo rồi gửi cho Tính</div>
+                        <div class="chat-bubble bubble-agent">
+                            <div class="agent-name-tag" style="color: var(--drive-color)">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
+                                Drive Agent
+                            </div>
+                            Tôi đã tìm thấy file báo cáo:
+                            <div class="fe-card drive-card">
+                                <div class="drive-card-title">📄 Báo cáo doanh thu Q2.pdf</div>
+                                <span style="color:var(--text-muted); font-size: 0.65rem">ID: file-999 | Google Drive</span>
+                            </div>
+                        </div>
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:#64748b"></div> Gmail Agent: Nhận được tín hiệu T1 hoàn thành. Đang kích hoạt...</div>
+                    `;
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("drive-rabbitmq", "var(--rabbitmq-color)");
+                    }, 400);
+                    
+                    // Linking animations in tab
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("link-d-rd", "var(--drive-color)");
+                    }, 200);
+                    setTimeout(() => {
+                        if(typeof animateSignal !== 'undefined') animateSignal("link-d-r", "var(--rabbitmq-color)");
+                    }, 600);
+                }
+            },
+            {
+                title: "10. Gmail thức dậy",
+                desc: "Gmail Agent được đánh thức bởi RabbitMQ, đọc Blackboard. Nhận thấy T1 đã completed, Gmail <strong>đọc trực tiếp kết quả của T1 từ Blackboard (Memory Linking)</strong> để lấy tên file đính kèm làm input đầu vào.",
+                sender: "node-rabbitmq",
+                receiver: "node-gmail",
+                pathId: "rabbitmq-gmail",
+                blackboard: {
+                    global_context: { conversation_id: "conv-98765", user_id: "user-uuid-1111", original_query: "tìm file báo cáo rồi gửi cho Tính" },
+                    tasks: {
+                        T1: { agent: "drive", status: "completed", output_results: { files: [{ name: "Báo cáo doanh thu Q2.pdf" }] } },
+                        T2: { agent: "gmail", status: "running", input_params: { recipient: "Tính", file: "Báo cáo doanh thu Q2.pdf" } }
+                    }
+                },
+                fsm: { agent: "Gmail Agent", node: "classify", attempt: 1 },
+                rabbitmq: null,
+                sse: {
+                    type: "workflow",
+                    payload: { task_id: "T2", node: "classify", status: "running" }
+                },
+                action: (fe) => {
+                    document.getElementById("node-gmail").classList.remove("parked-node");
+                    fe.innerHTML += `
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:var(--gmail-color)"></div> Gmail Agent: 🔍 Đang phân tích thông tin người nhận (Tính) & nạp file báo cáo...</div>
+                    `;
+                    // scroll mock fe
+                    const scrollContainer = document.getElementById("mock-chat-messages");
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                }
+            },
+            {
+                title: "11. Gmail soạn thư nháp",
+                desc: "Gmail Agent chuyển sang node <code>execute</code>. Chạy Playbook gọi Gmail API tạo thư nháp (draft) kèm đường dẫn file Drive, thay vì gửi trực tiếp để đảm bảo an toàn.",
+                sender: "node-gmail",
+                receiver: "node-external",
+                pathId: "gmail-external",
+                blackboard: {},
+                fsm: { agent: "Gmail Agent", node: "execute", attempt: 1 },
+                rabbitmq: null,
+                sse: {
+                    type: "workflow",
+                    payload: { task_id: "T2", node: "execute", status: "running" }
+                },
+                action: (fe) => {
+                    fe.innerHTML += `
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:var(--gmail-color)"></div> Gmail Agent: ✉️ Đang soạn thư nháp trong Gmail...</div>
+                    `;
+                    const scrollContainer = document.getElementById("mock-chat-messages");
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                }
+            },
+            {
+                title: "12. Đợi phê duyệt (HITL)",
+                desc: "Gmail Agent phát hiện hành động gửi mail cần phê duyệt. Gmail ghi trạng thái <code>waiting-approval</code> và nội dung nháp lên Blackboard, bắn event <code>ask_user</code> và đỗ chờ.",
+                sender: "node-gmail",
+                receiver: "node-redis",
+                pathId: "drive-redis", // actually gmail-redis
+                blackboard: {
+                    global_context: { conversation_id: "conv-98765", user_id: "user-uuid-1111", original_query: "tìm file báo cáo rồi gửi cho Tính" },
+                    tasks: {
+                        T1: { agent: "drive", status: "completed" },
+                        T2: { 
+                            agent: "gmail", 
+                            status: "waiting-approval", 
+                            hitl: {
+                                correlation_id: "corr-gmail-t2",
+                                draft_preview: {
+                                    to: "tinh@mse.ai",
+                                    subject: "Báo cáo doanh thu Q2",
+                                    body: "Chào Tính, gửi bạn báo cáo doanh thu Q2 mà bạn yêu cầu.",
+                                    attachment: "Báo cáo doanh thu Q2.pdf"
+                                }
+                            } 
+                        }
+                    }
+                },
+                fsm: { agent: "Gmail Agent", node: "ask_user", attempt: 1 },
+                rabbitmq: null,
+                sse: {
+                    type: "ask_user",
+                    payload: { correlation_id: "corr-gmail-t2", type: "gmail_approve" }
+                },
+                action: (fe) => {
+                    // remove active tickers
+                    const tickers = fe.querySelectorAll(".sse-ticker");
+                    tickers.forEach(t => t.remove());
+                    
+                    fe.innerHTML += `
+                        <div class="chat-bubble bubble-agent">
+                            <div class="agent-name-tag" style="color: var(--gmail-color)">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                                Gmail Agent (Chờ duyệt)
+                            </div>
+                            Tôi đã soạn sẵn thư nháp gửi cho Tính. Bạn có đồng ý gửi đi không?
+                            <div class="fe-card gmail-card alert-hitl-pulse" id="hitl-card-element">
+                                <div class="gmail-card-title">📧 Chi tiết thư nháp (Draft)</div>
+                                <div class="hitl-draft-box">
+                                    <strong>Đến:</strong> tinh@mse.ai <br>
+                                    <strong>Tiêu đề:</strong> Báo cáo doanh thu Q2 <br>
+                                    <strong>Đính kèm:</strong> 📄 Báo cáo doanh thu Q2.pdf
+                                </div>
+                                <div class="hitl-actions">
+                                    <button class="btn btn-sm btn-approve" onclick="handleHITL(true)">Phê duyệt (Send)</button>
+                                    <button class="btn btn-sm btn-cancel" onclick="handleHITL(false)">Hủy bỏ (Reject)</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    const scrollContainer = document.getElementById("mock-chat-messages");
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                    
+                    // Pause the simulator automations
+                    isPaused = true;
+                    updatePlayButtonState();
+                }
+            },
+            {
+                title: "13a. Phê duyệt & Gửi thư",
+                desc: "Người dùng bấm <strong>Phê duyệt</strong>. FE gửi POST <code>/approve</code> tới Gateway. Gateway phát tín hiệu phê duyệt lên RabbitMQ. Gmail thức dậy, gọi API gửi thư, cập nhật trạng thái <code>completed</code> trên Blackboard và kết thúc.",
+                sender: "node-fe",
+                receiver: "node-gateway",
+                pathId: "fe-nginx",
+                blackboard: {
+                    global_context: { conversation_id: "conv-98765", user_id: "user-uuid-1111", original_query: "tìm file báo cáo rồi gửi cho Tính" },
+                    tasks: {
+                        T1: { agent: "drive", status: "completed" },
+                        T2: { agent: "gmail", status: "completed", output_results: { status: "sent", message_id: "msg-12345" } }
+                    }
+                },
+                fsm: { agent: "Gmail Agent", node: "end", attempt: 1 },
+                rabbitmq: null,
+                sse: {
+                    type: "workflow",
+                    payload: { task_id: "T2", status: "completed" }
+                },
+                action: (fe) => {
+                    const hitlCard = document.getElementById("hitl-card-element");
+                    if (hitlCard) {
+                        hitlCard.className = "fe-card gmail-card";
+                        hitlCard.innerHTML = `
+                            <div class="gmail-card-title" style="color:var(--drive-color)">📧 Đã gửi thành công</div>
+                            <div class="hitl-draft-box" style="opacity: 0.6">
+                                <strong>Đến:</strong> tinh@mse.ai <br>
+                                <strong>Tiêu đề:</strong> Báo cáo doanh thu Q2 <br>
+                            </div>
+                        `;
+                    }
+                    fe.innerHTML += `
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:var(--drive-color)"></div> Gmail Agent: 🚀 Đã gửi email thành công cho Tính!</div>
+                    `;
+                    const scrollContainer = document.getElementById("mock-chat-messages");
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                    
+                    // Gateway also publishes approve and notifies gmail in the background
+                    setTimeout(() => {
+                        animateSignal("gateway-rabbitmq", "var(--rabbitmq-color)");
+                    }, 200);
+                    setTimeout(() => {
+                        animateSignal("rabbitmq-gmail", "var(--rabbitmq-color)");
+                    }, 500);
+                    setTimeout(() => {
+                        animateSignal("gmail-redis", "var(--redis-color)");
+                    }, 800);
+                }
+            },
+            {
+                title: "13b. Hủy bỏ tác vụ",
+                desc: "Người dùng bấm <strong>Hủy bỏ</strong>. FE gửi POST <code>/cancel</code>. Gmail nhận được signal hủy kèm sentinel <code>__cancelled__</code>, base agent dừng các task đang park, dọn dẹp Blackboard và kết thúc êm thấm mà không lỗi đỏ.",
+                sender: "node-fe",
+                receiver: "node-gateway",
+                pathId: "fe-nginx",
+                blackboard: {
+                    global_context: { conversation_id: "conv-98765", user_id: "user-uuid-1111", original_query: "tìm file báo cáo rồi gửi cho Tính" },
+                    tasks: {
+                        T1: { agent: "drive", status: "completed" },
+                        T2: { agent: "gmail", status: "cancelled", sentinel: "__cancelled__" }
+                    }
+                },
+                fsm: { agent: "Gmail Agent", node: "end", attempt: 1 },
+                rabbitmq: null,
+                sse: {
+                    type: "workflow",
+                    payload: { task_id: "T2", status: "cancelled" }
+                },
+                action: (fe) => {
+                    const hitlCard = document.getElementById("hitl-card-element");
+                    if (hitlCard) {
+                        hitlCard.className = "fe-card";
+                        hitlCard.style.borderColor = "var(--text-muted)";
+                        hitlCard.innerHTML = `
+                            <div class="gmail-card-title" style="color:var(--text-muted)">✉️ Đã hủy tác vụ</div>
+                            <span style="color:var(--text-muted)">Thư nháp đã được xóa và dừng các tiến trình liên quan.</span>
+                        `;
+                    }
+                    fe.innerHTML += `
+                        <div class="sse-ticker"><div class="ticker-dot" style="background:#ef4444"></div> Tác vụ đã dừng theo yêu cầu người dùng.</div>
+                    `;
+                    const scrollContainer = document.getElementById("mock-chat-messages");
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                }
+            }
+        ];
+
+        // --- SIMULATOR CONTROLS ---
+        let currentStepIndex = 0;
+        let isPaused = true;
+        let playInterval = null;
+        let baseDelay = 3500; // 3.5s per step at 1x
+        let connectionLines = {};
+
+        // DOM elements
+        const btnPlay = document.getElementById("btn-play");
+        const btnPrev = document.getElementById("btn-prev");
+        const btnNext = document.getElementById("btn-next");
+        const btnReset = document.getElementById("btn-reset");
+        const speedSlider = document.getElementById("speed-slider");
+        const speedLabel = document.getElementById("speed-label");
+        const stepListContainer = document.getElementById("step-list-container");
+        const blackboardInspector = document.getElementById("blackboard-inspector");
+        const logTerminal = document.getElementById("log-terminal");
+        
+        // FSM elements
+        const fsmAgentName = document.getElementById("fsm-active-agent-name");
+        const fsmStepCounter = document.getElementById("fsm-step-counter");
+        const fsmNodes = {
+            classify: document.getElementById("fsm-node-classify"),
+            execute: document.getElementById("fsm-node-execute"),
+            reflect: document.getElementById("fsm-node-reflect"),
+            ask_user: document.getElementById("fsm-node-ask_user"),
+            end: document.getElementById("fsm-node-end")
+        };
+
+        // Modal
+        const btnAbout = document.getElementById("btn-about");
+        const modalOverlay = document.getElementById("modal-overlay");
+        const aboutModal = document.getElementById("about-modal");
+        const modalClose = document.getElementById("modal-close");
+
+        btnAbout.onclick = () => {
+            modalOverlay.style.display = "block";
+            aboutModal.style.display = "block";
+        };
+        modalClose.onclick = modalOverlay.onclick = () => {
+            modalOverlay.style.display = "none";
+            aboutModal.style.display = "none";
+        };
+
+        // Draw connections on load & resize
+        window.addEventListener("load", () => {
+            initConnections();
+            renderStepList();
+            goToStep(0);
+        });
+
+        window.addEventListener("resize", () => {
+            updateConnectionsPositions();
+        });
+
+        // Initialize SVG lines
+        function initConnections() {
+            // Setup static lines between nodes
+            // Format: [id, startElement, endElement, color, style]
+            const linesData = [
+                ["fe-nginx", "node-fe", "node-nginx", "var(--fe-color)", "curved"],
+                ["nginx-gateway", "node-nginx", "node-gateway", "var(--gateway-color)", "straight"],
+                ["gateway-intent", "node-gateway", "node-intent", "var(--intent-color)", "curved"],
+                ["gateway-redis", "node-gateway", "node-redis", "var(--redis-color)", "curved"],
+                ["gateway-rabbitmq", "node-gateway", "node-rabbitmq", "var(--rabbitmq-color)", "curved"],
+                ["gateway-postgres", "node-gateway", "node-postgres", "var(--postgres-color)", "curved"],
+                ["intent-redis", "node-intent", "node-redis", "var(--redis-color)", "curved"],
+                ["intent-rabbitmq", "node-intent", "node-rabbitmq", "var(--rabbitmq-color)", "curved"],
+                
+                ["rabbitmq-drive", "node-rabbitmq", "node-drive", "var(--rabbitmq-color)", "orthogonal"],
+                ["rabbitmq-gmail", "node-rabbitmq", "node-gmail", "var(--rabbitmq-color)", "orthogonal"],
+                ["rabbitmq-calendar", "node-rabbitmq", "node-calendar", "var(--rabbitmq-color)", "orthogonal"],
+                ["rabbitmq-docs", "node-rabbitmq", "node-docs", "var(--rabbitmq-color)", "orthogonal"],
+
+                ["drive-redis", "node-drive", "node-redis", "var(--redis-color)", "orthogonal"],
+                ["gmail-redis", "node-gmail", "node-redis", "var(--redis-color)", "orthogonal"],
+                ["calendar-redis", "node-calendar", "node-redis", "var(--redis-color)", "orthogonal"],
+                ["docs-redis", "node-docs", "node-redis", "var(--redis-color)", "orthogonal"],
+                
+                ["drive-external", "node-drive", "node-external", "var(--external-color)", "curved"],
+                ["gmail-external", "node-gmail", "node-external", "var(--external-color)", "curved"],
+                ["calendar-external", "node-calendar", "node-external", "var(--external-color)", "curved"],
+                ["docs-external", "node-docs", "node-external", "var(--external-color)", "curved"]
+            ];
+
+            const svg = document.querySelector(".canvas-svg");
+            
+            linesData.forEach(([id, start, end, color, style]) => {
+                drawConnector(id, start, end, color, style);
+            });
+        }
+
+        function drawConnector(id, startId, endId, color, style) {
+            const container = document.getElementById("canvas-container");
+            const startEl = document.getElementById(startId);
+            const endEl = document.getElementById(endId);
+            const svg = document.querySelector(".canvas-svg");
+            
+            if (!startEl || !endEl) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const startRect = startEl.getBoundingClientRect();
+            const endRect = endEl.getBoundingClientRect();
+
+            // Find ports coordinates relative to container
+            const x1 = (startRect.left + startRect.width / 2) - containerRect.left;
+            const y1 = (startRect.top + startRect.height / 2) - containerRect.top;
+            const x2 = (endRect.left + endRect.width / 2) - containerRect.left;
+            const y2 = (endRect.top + endRect.height / 2) - containerRect.top;
+
+            let path = document.getElementById(id);
+            if (!path) {
+                path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("id", id);
+                svg.appendChild(path);
+            }
+
+            let d = "";
+            if (style === "straight") {
+                d = `M ${x1} ${y1} L ${x2} ${y2}`;
+            } else if (style === "orthogonal") {
+                const midY = y1 + (y2 - y1) * 0.55;
+                d = `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
+            } else if (style === "curved") {
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const cx1 = x1 + dx * 0.25;
+                const cy1 = y1 + dy * 0.05;
+                const cx2 = x1 + dx * 0.75;
+                const cy2 = y2 - dy * 0.05;
+                d = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+            }
+
+            path.setAttribute("d", d);
+            path.setAttribute("stroke", color);
+            path.setAttribute("stroke-width", "1.5");
+            path.setAttribute("fill", "none");
+            path.setAttribute("opacity", "0.15");
+            path.style.transition = "all 0.3s ease";
+
+            // store data for updates
+            connectionLines[id] = { startId, endId, color, style };
+        }
+
+        function updateConnectionsPositions() {
+            Object.keys(connectionLines).forEach(id => {
+                const { startId, endId, color, style } = connectionLines[id];
+                drawConnector(id, startId, endId, color, style);
+            });
+        }
+
+        function animateSignal(pathId, glowColor) {
+            const path = document.getElementById(pathId);
+            if (!path) return;
+
+            // set glow color
+            path.style.setProperty("--glow-color", glowColor);
+            path.setAttribute("stroke", glowColor);
+            path.classList.add("pulse-path");
+
+            setTimeout(() => {
+                path.classList.remove("pulse-path");
+                // restore original low opacity color
+                const originalColor = connectionLines[pathId] ? connectionLines[pathId].color : "rgba(255,255,255,0.15)";
+                path.setAttribute("stroke", originalColor);
+            }, 2500);
+        }
+
+        // Render Step lists in left sidebar
+        function renderStepList() {
+            stepListContainer.innerHTML = "";
+            
+            // Render up to index 12 normally (including HITL waiting point)
+            // step 13a & 13b are sub-options, so we group them
+            STEPS.forEach((step, idx) => {
+                // If it is step 13a or 13b, we format them differently
+                if (idx > 12) return;
+                
+                const item = document.createElement("div");
+                item.className = "step-item";
+                item.id = `step-item-${idx}`;
+                item.innerHTML = step.title;
+                item.onclick = () => {
+                    isPaused = true;
+                    updatePlayButtonState();
+                    goToStep(idx);
+                };
+                stepListContainer.appendChild(item);
+            });
+
+            // Add branching choices explicitly under step 12
+            const branchingBox = document.createElement("div");
+            branchingBox.style.paddingLeft = "10px";
+            branchingBox.style.display = "flex";
+            branchingBox.style.flexDirection = "column";
+            branchingBox.style.gap = "4px";
+            branchingBox.style.marginTop = "4px";
+            branchingBox.id = "hitl-branch-options";
+
+            const optA = document.createElement("div");
+            optA.className = "step-item";
+            optA.id = "step-item-13"; // represents 13a
+            optA.innerHTML = "↳ Phê duyệt & gửi (13a)";
+            optA.onclick = () => {
+                isPaused = true;
+                updatePlayButtonState();
+                goToStep(13); // index 13 = 13a
+            };
+            
+            const optB = document.createElement("div");
+            optB.className = "step-item";
+            optB.id = "step-item-14"; // represents 13b
+            optB.innerHTML = "↳ Hủy bỏ tác vụ (13b)";
+            optB.onclick = () => {
+                isPaused = true;
+                updatePlayButtonState();
+                goToStep(14); // index 14 = 13b
+            };
+
+            branchingBox.appendChild(optA);
+            branchingBox.appendChild(optB);
+            stepListContainer.appendChild(branchingBox);
+        }
+
+        // --- SIMULATION ENGINE ---
+        function goToStep(index) {
+            // handle bounds
+            if (index < 0 || index >= STEPS.length) return;
+            
+            // clear active nodes highlighting
+            document.querySelectorAll(".node-card").forEach(node => {
+                node.classList.remove("active-node");
+            });
+
+            currentStepIndex = index;
+            const step = STEPS[index];
+
+            // update step list UI active state
+            document.querySelectorAll(".step-item").forEach(item => {
+                item.classList.remove("active");
+            });
+            
+            if (index <= 12) {
+                const activeItem = document.getElementById(`step-item-${index}`);
+                if (activeItem) activeItem.classList.add("active");
+            } else if (index === 13) {
+                document.getElementById("step-item-13").classList.add("active");
+            } else if (index === 14) {
+                document.getElementById("step-item-14").classList.add("active");
+            }
+
+            // Update details sidebar text
+            const activeStepItem = document.getElementById(`step-item-${index}`);
+            
+            // Glow active node sender/receiver
+            if (step.sender) {
+                const senderNode = document.getElementById(step.sender);
+                if (senderNode) {
+                    senderNode.classList.add("active-node");
+                    // Apply current node text color glow
+                    senderNode.style.color = "white";
+                }
+            }
+            if (step.receiver) {
+                const receiverNode = document.getElementById(step.receiver);
+                if (receiverNode) receiverNode.classList.add("active-node");
+            }
+
+            // Animate signal path
+            if (step.pathId) {
+                const color = connectionLines[step.pathId] ? connectionLines[step.pathId].color : "#fff";
+                animateSignal(step.pathId, color);
+            }
+
+            // Update Blackboard state
+            updateBlackboardUI(step.blackboard);
+
+            // Update LangGraph FSM panel
+            updateFSMUI(step.fsm);
+
+            // Log details
+            writeToLog(step.title, step.desc, step.rabbitmq, step.sse);
+
+            // Call mockup FE action
+            const mockChatMessages = document.getElementById("mock-chat-messages");
+            if (index === 0) {
+                // reset
+                mockChatMessages.innerHTML = "";
+                document.getElementById("node-gmail").className = "node-card node-worker node-gmail";
+            }
+            
+            if (step.action) {
+                step.action(mockChatMessages);
+            }
+
+            // Enable/disable navigation buttons
+            btnPrev.disabled = index === 0;
+            // Next is only disabled if we are at step 13a or 13b (the end branches)
+            btnNext.disabled = index === 13 || index === 14;
+        }
+
+        function handleHITL(approve) {
+            // Trigger 13a or 13b depending on the choice
+            if (approve) {
+                goToStep(13); // index 13 = 13a
+            } else {
+                goToStep(14); // index 14 = 13b
+            }
+            
+            // Resume play if slider is active or just let user step
+            isPaused = true;
+            updatePlayButtonState();
+        }
+
+        // Live blackboard inspector formatter
+        let accumulatedBlackboard = {};
+        function updateBlackboardUI(patch) {
+            if (currentStepIndex === 0) {
+                accumulatedBlackboard = {};
+            } else if (currentStepIndex === 13 || currentStepIndex === 14) {
+                // Merge completed status
+                accumulatedBlackboard = { ...accumulatedBlackboard, ...patch };
+            } else {
+                // accumulate key parameters to look real
+                accumulatedBlackboard = { ...accumulatedBlackboard, ...patch };
+            }
+
+            if (Object.keys(accumulatedBlackboard).length === 0) {
+                blackboardInspector.innerHTML = `<span class="json-null">Empty Blackboard context</span>`;
+                return;
+            }
+
+            // Convert to nice HTML syntax colored string
+            const jsonStr = JSON.stringify(accumulatedBlackboard, null, 2);
+            blackboardInspector.innerHTML = syntaxHighlight(jsonStr);
+        }
+
+        function syntaxHighlight(json) {
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, function (match) {
+                let cls = 'json-number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'json-key';
+                        return '<span class="' + cls + '">' + match.replace(/:$/, '') + '</span>:';
+                    } else {
+                        cls = 'json-string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'json-boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'json-null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+
+        // Update internal LangGraph FSM panel
+        function updateFSMUI(fsm) {
+            fsmAgentName.innerText = fsm.agent;
+            fsmStepCounter.innerText = fsm.attempt > 0 ? `Attempts: ${fsm.attempt}/2` : `Attempts: 0/2`;
+            
+            // clear active fsm classes
+            Object.values(fsmNodes).forEach(node => {
+                node.className = "fsm-node";
+            });
+
+            if (fsm.node && fsmNodes[fsm.node]) {
+                const nodeEl = fsmNodes[fsm.node];
+                if (fsm.agent.includes("Drive")) {
+                    nodeEl.classList.add("active", "active-drive");
+                } else if (fsm.agent.includes("Gmail")) {
+                    nodeEl.classList.add("active", "active-gmail");
+                } else {
+                    nodeEl.classList.add("active");
+                }
+            }
+        }
+
+        // Terminal signal logs
+        function writeToLog(title, desc, rabbitmq, sse) {
+            if (currentStepIndex === 0) {
+                logTerminal.innerHTML = `<div class="log-entry"><span class="log-time">[${new Date().toLocaleTimeString()}]</span> System initialized. Awaiting commands...</div>`;
+                return;
+            }
+            
+            let html = `<div class="log-entry">
+                <span class="log-time">[${new Date().toLocaleTimeString()}]</span> 
+                <strong>${title}</strong>: ${desc.replace(/<\/?[^>]+(>|$)/g, "")}
+            </div>`;
+
+            if (rabbitmq) {
+                html += `<div class="log-entry" style="padding-left: 10px;">
+                    <span class="log-tag-rabbitmq">RabbitMQ Queue [${rabbitmq.routing_key}]:</span>
+                    <span style="color:#fcd34d">${JSON.stringify(rabbitmq.body)}</span>
+                </div>`;
+            }
+
+            if (sse) {
+                html += `<div class="log-entry" style="padding-left: 10px;">
+                    <span class="log-tag-sse">SSE Event [chat.response]:</span>
+                    <span style="color:#a5f3fc">${JSON.stringify(sse)}</span>
+                </div>`;
+            }
+
+            logTerminal.innerHTML += html;
+            logTerminal.scrollTop = logTerminal.scrollHeight;
+        }
+
+        // Play Pause Auto runner
+        function togglePlay() {
+            isPaused = !isPaused;
+            updatePlayButtonState();
+            
+            if (!isPaused) {
+                runAutoStep();
+            } else {
+                clearTimeout(playInterval);
+            }
+        }
+
+        function updatePlayButtonState() {
+            if (isPaused) {
+                btnPlay.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play`;
+                btnPlay.className = "btn btn-primary";
+            } else {
+                btnPlay.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg> Pause`;
+                btnPlay.className = "btn";
+            }
+        }
+
+        function runAutoStep() {
+            if (isPaused) return;
+
+            const speed = parseInt(speedSlider.value);
+            const currentDelay = baseDelay / speed;
+
+            // Wait point at 12 (HITL Approval card)
+            if (currentStepIndex === 12) {
+                // Must pause automatically to wait for approval
+                isPaused = true;
+                updatePlayButtonState();
+                return;
+            }
+
+            // Normal steps cycle forward
+            if (currentStepIndex < 12) {
+                goToStep(currentStepIndex + 1);
+                playInterval = setTimeout(runAutoStep, currentDelay);
+            } else {
+                // If we already finished (13a or 13b), stop playing
+                isPaused = true;
+                updatePlayButtonState();
+            }
+        }
+
+        // Speed adjustment listener
+        speedSlider.oninput = () => {
+            const val = speedSlider.value;
+            speedLabel.innerText = val + "x";
+        };
+
+        // Click handlers
+        btnPlay.onclick = togglePlay;
+        
+        btnPrev.onclick = () => {
+            isPaused = true;
+            updatePlayButtonState();
+            
+            // If we are at 13a or 13b, the previous step is 12
+            if (currentStepIndex === 13 || currentStepIndex === 14) {
+                goToStep(12);
+            } else {
+                goToStep(currentStepIndex - 1);
+            }
+        };
+
+        btnNext.onclick = () => {
+            isPaused = true;
+            updatePlayButtonState();
+            
+            if (currentStepIndex < 12) {
+                goToStep(currentStepIndex + 1);
+            }
+        };
+
+        btnReset.onclick = () => {
+            isPaused = true;
+            updatePlayButtonState();
+            clearTimeout(playInterval);
+            goToStep(0);
+        };
+    </script>
+</body>
+</html>

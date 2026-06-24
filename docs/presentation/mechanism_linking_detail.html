@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cơ chế Redis Blackboard & Memory Linking - MSE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --panel-bg: rgba(255, 255, 255, 0.9);
+            --border-color: #cbd5e1;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            
+            --redis-color: #dc2626;
+            --drive-color: #059669;
+            --docs-color: #2563eb;
+            --calendar-color: #d97706;
+            --gmail-color: #e11d48;
+            --rabbitmq-color: #ea580c;
+            --fe-color: #0891b2;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg);
+            background-image: radial-gradient(at 10% 10%, rgba(203, 213, 225, 0.3) 0px, transparent 50%),
+                              radial-gradient(at 90% 90%, rgba(241, 245, 249, 0.5) 0px, transparent 50%);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        header {
+            background: rgba(255, 255, 255, 0.85);
+            border-bottom: 2px solid var(--border-color);
+            backdrop-filter: blur(12px);
+            padding: 16px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            background: linear-gradient(to right, #0f172a, var(--redis-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1.3fr 1fr;
+            flex-grow: 1;
+            padding: 20px;
+            gap: 20px;
+            height: calc(100vh - 60px);
+            overflow: hidden;
+        }
+
+        .card {
+            background: var(--panel-bg);
+            border: 1.5px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        }
+
+        .card h2 {
+            font-size: 1rem;
+            color: var(--redis-color);
+            margin-bottom: 12px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .controls-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            background: #ffffff;
+            border: 1.5px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-main);
+            padding: 8px 14px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+            font-size: 0.8rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-color: var(--redis-color);
+        }
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Redis HASH Visual Board */
+        .redis-board {
+            flex-grow: 1;
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1.5px solid var(--border-color);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            overflow-y: auto;
+        }
+
+        .redis-title-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(220, 38, 38, 0.15);
+            padding-bottom: 8px;
+        }
+
+        .redis-key-tag {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            color: var(--redis-color);
+            background: rgba(220, 38, 38, 0.05);
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+
+        .redis-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            flex-grow: 1;
+            position: relative;
+        }
+
+        .redis-field-card {
+            background: #f8fafc;
+            border: 1.5px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 0.72rem;
+            font-family: 'Fira Code', monospace;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: all 0.3s ease;
+            position: relative;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+            opacity: 0.65;
+        }
+
+        .redis-field-card.active {
+            opacity: 1;
+            border-color: var(--redis-color);
+            box-shadow: 0 0 10px rgba(220, 38, 38, 0.15);
+        }
+
+        .redis-field-card.running {
+            opacity: 1;
+            border-color: var(--fe-color);
+            box-shadow: 0 0 15px rgba(8, 145, 178, 0.25);
+            background: rgba(8, 145, 178, 0.02);
+        }
+
+        .redis-field-card.completed {
+            opacity: 1;
+            border-color: #10b981;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+            background: rgba(16, 185, 129, 0.02);
+        }
+
+        .field-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.78rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .json-highlight-box {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 6px;
+            line-height: 1.35;
+            color: #0f172a;
+            overflow-x: auto;
+        }
+
+        .pulse-path {
+            stroke-dasharray: 6 6;
+            animation: flow 1.2s linear infinite;
+            opacity: 1 !important;
+            stroke-width: 3px !important;
+        }
+        @keyframes flow { to { stroke-dashoffset: -30; } }
+
+        .desc-text {
+            font-size: 0.82rem;
+            line-height: 1.45;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .desc-step {
+            background: #f8fafc;
+            border-left: 3px solid var(--redis-color);
+            border-top: 1.5px solid var(--border-color);
+            border-right: 1.5px solid var(--border-color);
+            border-bottom: 1.5px solid var(--border-color);
+            padding: 10px 14px;
+            border-radius: 0 6px 6px 0;
+            font-size: 0.8rem;
+            margin-top: 5px;
+            min-height: 70px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        /* RabbitMQ Live Logs */
+        .rabbitmq-logs {
+            flex-grow: 1;
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.68rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 10px;
+            max-height: 200px;
+        }
+
+        .log-line {
+            padding: 4px 6px;
+            border-radius: 4px;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-left: 3px solid #64748b;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .log-line.task-req { border-left-color: var(--rabbitmq-color); }
+        .log-line.task-res { border-left-color: #10b981; }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .log-body {
+            color: #0f172a;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .code-viewer {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.68rem;
+            color: #0f172a;
+            background: #f8fafc;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            overflow-y: auto;
+            max-height: 180px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Cơ chế Redis Blackboard & Memory Linking</h1>
+        <div class="controls-group">
+            <button class="btn" id="btn-prev" onclick="changeStep(-1)" disabled>◀ Trước</button>
+            <button class="btn" id="btn-next" onclick="changeStep(1)">Tiếp theo ▶</button>
+            <button class="btn" style="background:rgba(239, 68, 68, 0.05); border-color: rgba(239, 68, 68, 0.25);" onclick="resetSimulation()">Reset</button>
+            <button class="btn" style="background:transparent; border-color:var(--border-color);" onclick="window.close()">Đóng ✕</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- REDIS BLACKBOARD BOARD -->
+        <div class="card">
+            <div class="redis-board" id="redis-board-container">
+                <svg id="link-svg" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 1;"></svg>
+                
+                <div class="redis-title-bar">
+                    <span style="font-weight: 500; font-size: 0.85rem;">Redis Storage (Blackboard Plan HASH)</span>
+                    <span class="redis-key-tag">plan:plan-mse-v5-demo:context</span>
+                </div>
+
+                <div class="redis-grid">
+                    <!-- T1 drive field -->
+                    <div class="redis-field-card" id="card-t1" style="border-color: var(--drive-color);">
+                        <div class="field-title" style="color: var(--drive-color);">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+                            T1: Drive Agent
+                        </div>
+                        <div class="json-highlight-box">
+{
+  "agent": "drive",
+  "status": "<span id="t1-status">pending</span>",
+  "output_results": {
+    "files": [
+      {"id": "f-1", <span id="t1-val1">"name": "Báo cáo doanh thu Q2.pdf"</span>},
+      {"id": "f-2", <span id="t1-val2">"name": "Báo cáo chi phí Q2.pdf"</span>}
+    ]
+  }
+}
+                        </div>
+                    </div>
+
+                    <!-- T2 docs field -->
+                    <div class="redis-field-card" id="card-t2" style="border-color: var(--docs-color);">
+                        <div class="field-title" style="color: var(--docs-color);">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                            T2: Docs Agent (Needs T1)
+                        </div>
+                        <div class="json-highlight-box">
+{
+  "agent": "docs",
+  "status": "<span id="t2-status">pending</span>",
+  "needs_from": <span id="t2-link">["drive:T1"]</span>,
+  "input_params": { "instruction": "tóm tắt 2 file báo cáo" },
+  "output_results": {
+    <span id="t2-val">"summary_file": "Tóm tắt kết quả Q2.docx"</span>
+  }
+}
+                        </div>
+                    </div>
+
+                    <!-- T3 calendar field -->
+                    <div class="redis-field-card" id="card-t3" style="border-color: var(--calendar-color);">
+                        <div class="field-title" style="color: var(--calendar-color);">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm-5-7h-5v5h5v-5z"/></svg>
+                            T3: Calendar Agent
+                        </div>
+                        <div class="json-highlight-box">
+{
+  "agent": "calendar",
+  "status": "<span id="t3-status">pending</span>",
+  "output_results": {
+    "event": {
+      "id": "e-101",
+      <span id="t3-val">"title": "Họp review báo cáo Q2"</span>,
+      <span id="t3-link-val">"meet_link": "meet.google.com/abc"</span>
+    }
+  }
+}
+                        </div>
+                    </div>
+
+                    <!-- T4 gmail field -->
+                    <div class="redis-field-card" id="card-t4" style="border-color: var(--gmail-color);">
+                        <div class="field-title" style="color: var(--gmail-color);">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2z"/></svg>
+                            T4: Gmail Agent (Needs T2, T3)
+                        </div>
+                        <div class="json-highlight-box">
+{
+  "agent": "gmail",
+  "status": "<span id="t4-status">pending</span>",
+  "needs_from": [<span id="t4-link1">"docs:T2"</span>, <span id="t4-link2">"calendar:T3"</span>],
+  "input_params": { "recipient": "Tính và Nam" }
+}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TECHNICAL EXPLANATIONS & RABBITMQ LOGS -->
+        <div class="card">
+            <h2>Hàng đợi Điều khiển RabbitMQ & Logs</h2>
+            <div class="desc-text">
+                RabbitMQ gửi tín hiệu kích hoạt gọn nhẹ (ID + metadata), trong khi Redis lưu giữ trạng thái toàn cục. Các agent tự liên kết dữ liệu chéo mà không làm phiền người dùng.
+            </div>
+
+            <div class="rabbitmq-logs" id="rmq-logs">
+                <div style="color: var(--text-muted); font-style: italic;">Chờ kích hoạt mô phỏng để nhận RabbitMQ Messages...</div>
+            </div>
+
+            <h2 style="margin-top: 15px; margin-bottom: 8px;">Diễn biến cơ chế điều phối tự động</h2>
+            <div class="desc-step" id="step-desc">
+                Nhấp "Tiếp theo ▶" để bắt đầu mô phỏng từng bước.
+            </div>
+
+            <h2 style="margin-top: 15px; margin-bottom: 8px; color: var(--redis-color);">Cơ chế Google OAuth & Reconnect (Nâng cấp Quyền)</h2>
+            <div class="desc-text" style="font-size: 0.76rem; background: rgba(220, 38, 38, 0.05); border: 1px dashed rgba(220, 38, 38, 0.2); border-radius: 6px; padding: 10px; line-height: 1.45;">
+                <strong>⚠️ Tiền đề ghi file:</strong> Khi chuyển đổi scope từ đọc (<code>drive.readonly</code>) sang ghi (<code>drive</code>), user <strong>bắt buộc phải Disconnect rồi Connect lại Google OAuth</strong> trên giao diện FE để cấp thêm quyền cho hệ thống.
+                <br>
+                <span style="display: block; margin-top: 6px; color: var(--text-main);">
+                    <strong>Luồng Token:</strong> FE (OAuth Connect) ➔ Gateway ➔ Google Consent (cấp scope <code>drive</code>) ➔ Callback lưu Vault (Postgres) ➔ Gateway tự refresh & nạp vào <code>TaskMessage.body.platform_tokens</code> trước khi dispatch ➔ Agent dùng gọi API.
+                </span>
+            </div>
+
+            <h2 style="margin-top: 15px; margin-bottom: 8px;">Trích đoạn logic BaseAgent Python</h2>
+            <pre class="code-viewer">
+# ai_workspace_shared/base_agent.py — _execute_and_notify (rút gọn)
+async def _execute_and_notify(self, task):
+    plan_id, task_id = task.headers.plan_id, task.headers.task_id
+
+    # 1. Memory Linking: đọc output_results các task upstream (needs_from)
+    #    từ Blackboard HASH plan:{plan_id}:context — chỉ lấy task đã completed.
+    task.body.params["dep_results"] = await self._gather_deps(task)
+
+    # 2. Đánh dấu running rồi chạy domain logic (execute() là abstract).
+    await set_task_status(self.redis_client, plan_id, task_id, "running")
+    result = await self.execute(task)
+
+    # 3. WRITE-BEFORE-PUBLISH: ghi output_results + completed lên Blackboard
+    #    TRƯỚC khi báo downstream (đảm bảo dep sẵn sàng khi message tới).
+    await set_task_output(self.redis_client, plan_id, task_id, result,
+                          status="completed")
+
+    # 4. Notify TRỰC TIẾP từng agent downstream qua routing key agent.{target}
+    #    (KHÔNG có event "*.completed" broadcast — đẩy thẳng vào queue đích).
+    for target in task.body.notify:        # vd "gmail:T4"
+        await self.rmq.publish(f"agent.{target.split(':')[0]}", result_msg)
+
+# _gather_deps → get_upstream_outputs(redis, plan_id, needs_from):
+#   for dep in needs_from:                 # vd "drive:T1"
+#       t = await get_task(redis, plan_id, dep.split(":")[1])
+#       if t["status"] == "completed": out[dep] = t["output_results"]
+            </pre>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        const maxSteps = 6;
+
+        window.onload = () => {
+            initTabConnections();
+            resetSimulation();
+        };
+
+        window.onresize = () => {
+            initTabConnections();
+        };
+
+        function drawTabConnector(svgId, pathId, startId, endId, color) {
+            const svg = document.getElementById(svgId);
+            if (!svg) return;
+            const container = svg.parentElement;
+            const startEl = document.getElementById(startId);
+            const endEl = document.getElementById(endId);
+            if (!startEl || !endEl) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const startRect = startEl.getBoundingClientRect();
+            const endRect = endEl.getBoundingClientRect();
+
+            const x1 = (startRect.left + startRect.width / 2) - containerRect.left;
+            const y1 = (startRect.top + startRect.height / 2) - containerRect.top;
+            const x2 = (endRect.left + endRect.width / 2) - containerRect.left;
+            const y2 = (endRect.top + endRect.height / 2) - containerRect.top;
+
+            let path = document.getElementById(pathId);
+            if (!path) {
+                path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("id", pathId);
+                svg.appendChild(path);
+            }
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const cx1 = x1 + dx * 0.25;
+            const cy1 = y1 + dy * 0.05;
+            const cx2 = x1 + dx * 0.75;
+            const cy2 = y2 - dy * 0.05;
+            const d = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+
+            path.setAttribute("d", d);
+            path.setAttribute("stroke", color);
+            path.setAttribute("stroke-width", "2");
+            path.setAttribute("fill", "none");
+            path.setAttribute("opacity", "0.4");
+            path.style.transition = "all 0.3s ease";
+        }
+
+        function initTabConnections() {
+            drawTabConnector("link-svg", "link-t1-t2", "t1-val1", "t2-link", "var(--docs-color)");
+            drawTabConnector("link-svg", "link-t2-t4", "t2-val", "t4-link1", "var(--gmail-color)");
+            drawTabConnector("link-svg", "link-t3-t4", "t3-val", "t4-link2", "var(--gmail-color)");
+        }
+
+        function highlightPath(id, opacity, pulse) {
+            const p = document.getElementById(id);
+            if (!p) return;
+            p.setAttribute("opacity", opacity);
+            if (pulse) {
+                p.setAttribute("stroke-width", "3.5");
+                p.classList.add("pulse-path");
+            } else {
+                p.setAttribute("stroke-width", "2");
+                p.classList.remove("pulse-path");
+            }
+        }
+
+        function resetSimulation() {
+            currentStep = 0;
+            updateControls();
+            
+            document.getElementById("t1-status").innerText = "pending";
+            document.getElementById("t2-status").innerText = "pending";
+            document.getElementById("t3-status").innerText = "pending";
+            document.getElementById("t4-status").innerText = "pending";
+
+            document.querySelectorAll(".redis-field-card").forEach(c => {
+                c.className = "redis-field-card";
+                c.style.boxShadow = "none";
+            });
+
+            document.querySelectorAll("#link-svg path").forEach(p => {
+                p.classList.remove("pulse-path");
+                p.setAttribute("stroke-width", "2");
+                p.setAttribute("opacity", "0.4");
+            });
+
+            document.getElementById("rmq-logs").innerHTML = `<div style="color: var(--text-muted); font-style: italic;">Chờ kích hoạt mô phỏng...</div>`;
+            document.getElementById("step-desc").innerHTML = "Nhấp \"Tiếp theo ▶\" để bắt đầu mô phỏng từng bước.";
+        }
+
+        function changeStep(dir) {
+            currentStep += dir;
+            if (currentStep < 0) currentStep = 0;
+            if (currentStep > maxSteps) currentStep = maxSteps;
+            updateControls();
+            renderStep();
+        }
+
+        function updateControls() {
+            document.getElementById("btn-prev").disabled = (currentStep === 0);
+            document.getElementById("btn-next").disabled = (currentStep === maxSteps);
+        }
+
+        function renderLogs(logsList) {
+            const logsContainer = document.getElementById("rmq-logs");
+            logsContainer.innerHTML = "";
+            logsList.forEach(({ key, type, body }) => {
+                const logLine = document.createElement("div");
+                logLine.className = `log-line ${type === 'request' ? 'task-req' : 'task-res'}`;
+                logLine.innerHTML = `
+                    <div class="log-header">
+                        <span>RoutingKey: ${key}</span>
+                        <span>${type.toUpperCase()}</span>
+                    </div>
+                    <div class="log-body">${JSON.stringify(body)}</div>
+                `;
+                logsContainer.appendChild(logLine);
+            });
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        function renderStep() {
+            const stepDesc = document.getElementById("step-desc");
+
+            // Reset field states and paths
+            document.querySelectorAll(".redis-field-card").forEach(c => c.className = "redis-field-card");
+            document.querySelectorAll("#link-svg path").forEach(p => {
+                p.classList.remove("pulse-path");
+                p.setAttribute("stroke-width", "2");
+                p.setAttribute("opacity", "0.4");
+            });
+            document.getElementById("t1-status").innerText = "pending";
+            document.getElementById("t2-status").innerText = "pending";
+            document.getElementById("t3-status").innerText = "pending";
+            document.getElementById("t4-status").innerText = "pending";
+
+            let logs = [];
+
+            if (currentStep >= 1) {
+                document.getElementById("card-t1").className = "redis-field-card running";
+                document.getElementById("t1-status").innerText = "running";
+                logs.push({ 
+                    key: "agent.drive", 
+                    type: "request", 
+                    body: { 
+                        headers: { plan_id: "plan-mse-v5-demo", task_id: "T1", source: "intent", type: "task" }, 
+                        body: { 
+                            action: "find_files", 
+                            needs_from: [], 
+                            notify: ["docs:T2"],
+                            platform_tokens: {
+                                google: {
+                                    access_token: "ya29.a0AfH6...",
+                                    refresh_token: "1//06...",
+                                    scopes: ["https://www.googleapis.com/auth/drive"]
+                                }
+                            }
+                        } 
+                    } 
+                });
+                stepDesc.innerHTML = "<strong>Bước 1:</strong> Intent Gate dispatch TaskMessage qua routing key <code>agent.drive</code>. Message này chứa <strong>platform_tokens.google</strong> (đã được Gateway tự động nạp từ Postgres Vault). Drive Agent (T1) chuyển trạng thái sang <code>running</code> để quét Drive tìm báo cáo.";
+            }
+
+            if (currentStep >= 2) {
+                document.getElementById("card-t1").className = "redis-field-card completed";
+                document.getElementById("t1-status").innerText = "completed";
+                logs.push({ key: "agent.docs", type: "response", body: { headers: { plan_id: "plan-mse-v5-demo", task_id: "T1", source: "drive", type: "result" }, body: { status: "success", data: { files: ["Báo cáo doanh thu Q2.pdf", "Báo cáo chi phí Q2.pdf"] } } } });
+                stepDesc.innerHTML = "<strong>Bước 2:</strong> Drive Agent hoàn thành. Nó ghi output_results + status=<code>completed</code> lên Redis Blackboard TRƯỚC, rồi publish ResultMessage TRỰC TIẾP tới <code>agent.docs</code> (theo notify) — không có event <code>*.completed</code>.";
+            }
+
+            if (currentStep >= 3) {
+                document.getElementById("card-t2").className = "redis-field-card running";
+                document.getElementById("t2-status").innerText = "running";
+                highlightPath("link-t1-t2", "1", true);
+                stepDesc.innerHTML = "<strong>Bước 3:</strong> Message <code>agent.docs</code> đánh thức Docs Agent (T2) đang park. Nó kiểm tra Blackboard thấy dep <code>drive:T1</code> đã <code>completed</code> → <strong>Memory Linking</strong>: đọc <code>output_results</code> của T1 từ Blackboard, bơm vào <code>params.dep_results</code> làm đầu vào.";
+            }
+
+            if (currentStep >= 4) {
+                document.getElementById("card-t2").className = "redis-field-card completed";
+                document.getElementById("t2-status").innerText = "completed";
+                document.getElementById("card-t3").className = "redis-field-card completed";
+                document.getElementById("t3-status").innerText = "completed";
+                logs.push({ key: "agent.gmail", type: "response", body: { headers: { plan_id: "plan-mse-v5-demo", task_id: "T2", source: "docs", type: "result" }, body: { status: "success", data: { summary_file: "Tóm tắt kết quả Q2.docx" } } } });
+                logs.push({ key: "agent.gmail", type: "response", body: { headers: { plan_id: "plan-mse-v5-demo", task_id: "T3", source: "calendar", type: "result" }, body: { status: "success", data: { meet_link: "meet.google.com/abc" } } } });
+                stepDesc.innerHTML = "<strong>Bước 4:</strong> Docs Agent xong, ghi Blackboard rồi notify <code>agent.gmail</code>. Calendar Agent (T3) chạy song song cũng xong và notify <code>agent.gmail</code>. Cả hai ResultMessage cùng trỏ về Gmail (T4).";
+            }
+
+            if (currentStep >= 5) {
+                document.getElementById("card-t4").className = "redis-field-card running";
+                document.getElementById("t4-status").innerText = "running";
+                highlightPath("link-t2-t4", "1", true);
+                highlightPath("link-t3-t4", "1", true);
+                stepDesc.innerHTML = "<strong>Bước 5:</strong> Gmail Agent (T4) được đánh thức. Nó kiểm tra <code>needs_from</code> = [<code>docs:T2</code>, <code>calendar:T3</code>] — CẢ HAI đã <code>completed</code> → đọc <code>output_results</code> của cả hai từ Blackboard (Memory Linking) để soạn thư. Gmail Agent sử dụng <strong>platform_tokens.google</strong> (scope <code>gmail.compose</code>) để soạn thư nháp.";
+            }
+
+            if (currentStep === 6) {
+                document.getElementById("card-t4").className = "redis-field-card completed";
+                document.getElementById("t4-status").innerText = "completed";
+                logs.push({ key: "chat.response", type: "response", body: { meta: { plan_id: "plan-mse-v5-demo", agent: "gmail", type: "message" }, payload: { content: "Đã gửi email cho Tính và Nam." } } });
+                stepDesc.innerHTML = "<strong>Bước 6 (Hoàn thành):</strong> Gmail (T4) là task cuối (notify rỗng) → không báo downstream. Nó ghi <code>completed</code> lên Blackboard và publish <code>chat.response</code> (SSE) báo user. Multi-agent phối hợp xong, KHÔNG có điều phối viên tập trung!";
+            }
+
+            renderLogs(logs);
+        }
+    </script>
+</body>
+</html>
